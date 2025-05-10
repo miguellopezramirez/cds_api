@@ -4,6 +4,7 @@ const cds = require ('@sap/cds');
 //2.-importar el servicio
 // aun no esta creado el servicio
 const servicioMongo = require('../services/inv-priceshistory-service-mongodb')
+const sercivioSimulacion = require('../services/inv-simulation-service');
 //3.- estructura princiapl  de la clas de contorller
 
 
