@@ -1,0 +1,45 @@
+{
+  "name": "SAP_CDS_JS_API_REST",
+  "version": "1.0.0",
+  "description": "A simple CAP project.",
+  "repository": "<Add your repository here>",
+  "license": "UNLICENSED",
+  "private": true,
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@babel/runtime": "^7.27.0",
+    "@dotenvx/dotenvx": "1.39.0",
+    "@sap/cds": "8",
+    "cors": "^2.8.5",
+    "express": "4",
+    "mongoose": "^8.14.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.27.0",
+    "@babel/core": "^7.26.10",
+    "@babel/node": "^7.26.0",
+    "@babel/plugin-transform-runtime": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "@cap-js/cds-types": "0.9.0",
+    "@cap-js/sqlite": "1",
+    "nodemon": "^3.1.9"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "dev": "cds watch",
+    "bat": "my-script.bat",
+    "build": "cds build --clean && npm run bat",
+    "build-docker": "cds build --clean"
+  },
+  "cds": {
+    "folders": {
+      "db": "src/api/models",
+      "srv": "src/api/routes"
+    }
+  },
+  "requires": {
+    "impl": "src/api/controllers/inv-invesions-controller.js"
+  }
+}
