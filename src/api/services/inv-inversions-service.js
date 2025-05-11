@@ -55,13 +55,19 @@ async function SimulateMACrossover(params) {
         const workingData = calculateMovingAverageData(history, startDate, endDate, shortMa,longMa);
         const result = {
             idSimulation: `${symbol}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
-            signal: 'golden_cross', 
-            start_date: startDate?.toISOString().split('T')[0] || 'auto',
-            end_date: endDate?.toISOString().split('T')[0] || 'auto',
-            moving_avegages: { short: shortMa, long: longMa },
+            //idUser
+            //idStrategy
+            //simulationName
+            symbol,
+            startDate: startDate?.toISOString().split('T')[0] || 'auto',
+            endDate: endDate?.toISOString().split('T')[0] || 'auto',
+            //amount
             signals: [],
+            spects: params?.specs || 'SHORT:50&LONG:200',
             chart_data: workingData,
-            result: 0
+            //results
+            //percentageReturn
+            //DETAIL_ROW 
         };
       
         return JSON.stringify(result);
