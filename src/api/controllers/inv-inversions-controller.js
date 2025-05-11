@@ -21,6 +21,10 @@ class InvestionsClass extends cds.ApplicationService{
             }
         });
 
+        this.on('strategy', async (req) => {
+            return servicio.GetAllInvestmentStrategies(req);
+        })
+
         return await super.init();
     };
 };

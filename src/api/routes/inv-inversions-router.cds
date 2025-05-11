@@ -20,4 +20,9 @@ service PricesHistoryRoute @(path:'/api/inv') {
         long_ma: Integer
     ) 
     returns String;
+
+    @Core.Description:'get-all-strategys'
+    @path : 'strategy'
+    function strategy()
+    returns array of String;
 };

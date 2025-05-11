@@ -1,5 +1,7 @@
 const axios = require('axios');
 require('dotenv').config(); 
+const ztvalues = require('../models/mongodb/ztvalues');
+
 
 async function GetAllPricesHistory(req) {
   try {
@@ -108,4 +110,57 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
     }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
 }
 
-module.exports = { GetAllPricesHistory, SimulateMACrossover };
+// MALR: Función para cargar todas las estrategias de inversión en el front
+async function GetAllInvestmentStrategies() {
+    try {
+        // 1. Obtener datos
+        const strategies = await ztvalues.find({ LABELID: 'IdStrategies' });
+        const indicators = await ztvalues.find({ LABELID: 'IdIndicators' });
+
+        if (!strategies?.length) {
+            throw new Error('No se encontraron estrategias');
+        }
+
+        // 2. Procesar indicadores
+        const indicatorsByStrategy = {};
+        
+        indicators.forEach(indicator => {
+            // Extraer el ID de estrategia (segunda parte después del guión)
+            const parts = indicator.VALUEPAID.split('-');
+            
+            if (parts.length !== 2 || parts[0] !== 'IdStrategies') {
+                console.warn(`Formato inválido en VALUEPAID: ${indicator.VALUEPAID}`);
+                return;
+            }
+            
+            const strategyId = parts[1]; // IdCMM, IdRSI, etc.
+            
+            if (!indicatorsByStrategy[strategyId]) {
+                indicatorsByStrategy[strategyId] = [];
+            }
+            
+            indicatorsByStrategy[strategyId].push({
+                ID: indicator.VALUEID,      
+                NAME: indicator.VALUE,       
+                DESCRIPTION: indicator.DESCRIPTION,
+            });
+        });
+
+        // 3. Combinar datos
+        const result = strategies.map(strategy => ({
+            ID: strategy.VALUEID,           
+            NAME: strategy.VALUE, 
+            ALIAS: strategy.ALIAS,          
+            DESCRIPTION: strategy.DESCRIPTION,
+            IMAGE: strategy.IMAGE,
+            INDICATORS: indicatorsByStrategy[strategy.VALUEID] || []
+        }));
+        return result;
+        
+    } catch (error) {
+        throw new Error('Error al obtener estrategias con indicadores');
+    }
+}
+
+
+module.exports = { GetAllPricesHistory, SimulateMACrossover, GetAllInvestmentStrategies };
