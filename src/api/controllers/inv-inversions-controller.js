@@ -6,6 +6,21 @@ class InvestionsClass extends cds.ApplicationService{
         this.on('pricehistory', async (req)=> {
            return servicio.GetAllPricesHistory(req);
         });
+
+        this.on('simulation', async (req) => {
+            if (!req.req.query.strategy) throw new Error('Strategy parameter required');
+
+            if (req.req.query.strategy?.toLowerCase() === 'macrossover') {
+                const result = await servicio.SimulateMACrossover({
+                    ...req.data
+                });
+                return JSON.parse(result);
+            }
+            else {
+                throw new Error('Solo implementado MACrossover strategy');
+            }
+        });
+
         return await super.init();
     };
 };
