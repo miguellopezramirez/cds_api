@@ -14,10 +14,11 @@ service PricesHistoryRoute @(path:'/api/inv') {
     action simulation(
         strategy: String,
         symbol: String, 
-        start_date: String,
-        end_date: String,
-        short_ma: Integer,
-        long_ma: Integer
+        startDate: String,
+        endDate: String,
+        amount: Decimal,
+        userId: String,
+        specs: String,
     ) 
     returns String;
 };

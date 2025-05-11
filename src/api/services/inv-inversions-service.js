@@ -29,10 +29,10 @@ async function GetAllPricesHistory(req) {
 async function SimulateMACrossover(params) { 
     try {
         const symbol = params?.symbol || 'AAPL';
-        const startDate = params?.start_date ? new Date(params.start_date) : null;
-        const endDate = params?.end_date ? new Date(params.end_date) : null;
-        const shortMa = params?.short_ma || 50; // Media Móvil Corta
-        const longMa = params?.long_ma || 200; // Media Móvil Larga
+        const startDate = params?.startDate ? new Date(params.startDate) : null;
+        const endDate = params?.endDate ? new Date(params.endDate) : null;
+        const { short: shortMa, long: longMa } = parseSpecs(params?.specs);
+        
     
         // Llamada a Alpha Vantage
         const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
@@ -106,6 +106,30 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 longSlice.reduce((sum, p) => sum + p.close, 0) / longMa : null
         };
     }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
+}
+
+function parseSpecs(specsString) {
+  const defaults = { short: 50, long: 200 };
+  const result = { ...defaults };
+
+  if (!specsString) return result;
+
+  const validKeys = new Set(['short', 'long']);
+  const minValues = { short: 5, long: 20 }; // Valores mínimos razonables
+
+  specsString.split('&').forEach(part => {
+    const [rawKey, value] = part.split(':');
+    if (!rawKey || !value) return;
+    
+    const key = rawKey.trim().toLowerCase();
+    const numValue = parseInt(value);
+    
+    if (validKeys.has(key) && !isNaN(numValue)) {
+      result[key] = Math.max(minValues[key], numValue); // Asegurar valor mínimo
+    }
+  });
+
+  return result;
 }
 
 module.exports = { GetAllPricesHistory, SimulateMACrossover };
