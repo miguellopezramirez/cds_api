@@ -1,6 +1,6 @@
 const cds = require ('@sap/cds');
 const servicio = require('../services/inv-inversions-service')
-
+const sercivioSimulacion = require('../services/inv-simulation-service');
 class InvestionsClass extends cds.ApplicationService{
     async init (){
         this.on('pricehistory', async (req)=> {
