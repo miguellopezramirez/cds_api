@@ -33,9 +33,9 @@ async function SimulateMACrossover(params) {
         const symbol = params?.symbol || 'AAPL';
         const startDate = params?.startDate ? new Date(params.startDate) : null;
         const endDate = params?.endDate ? new Date(params.endDate) : null;
+        const amount = params?.amount || 1000;
         const { short: shortMa, long: longMa } = parseSpecs(params?.specs);
         
-    
         // Llamada a Alpha Vantage
         const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
         const response = await axios.get(url);
@@ -52,22 +52,71 @@ async function SimulateMACrossover(params) {
             volume: parseInt(data['5. volume'])
         })).sort((a, b) => a.date - b.date);
 
-        const workingData = calculateMovingAverageData(history, startDate, endDate, shortMa,longMa);
+        const { priceData, signals } = calculateMovingAverageData(history, startDate, endDate, shortMa, longMa);
+        
+        // Calcular resultado financiero
+        let currentAmount = amount;
+        let shares = 0;
+        const transactions = [];
+        
+        signals.forEach(signal => {
+            if (signal.type === 'buy' && currentAmount > 0) {
+                shares = currentAmount / signal.price;
+                currentAmount = 0;
+                transactions.push({...signal, shares});
+            } else if (signal.type === 'sell' && shares > 0) {
+                currentAmount = shares * signal.price;
+                shares = 0;
+                transactions.push({...signal, proceeds: currentAmount});
+            }
+        });
+
+        // Si queda posición abierta, cerrarla al último precio
+        if (shares > 0) {
+            const lastPrice = priceData[priceData.length - 1].price_history.close;
+            currentAmount = shares * lastPrice;
+            transactions.push({
+                date: priceData[priceData.length - 1].price_history.date,
+                type: 'sell',
+                price: lastPrice,
+                reasoning: 'Final position closed',
+                proceeds: currentAmount,
+                isFinal: true
+            });
+        }
+
+        const profit = currentAmount - amount;
+        const percentageReturn = (profit / amount) * 100;
+
         const result = {
             idSimulation: `${symbol}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
-            //idUser
-            //idStrategy
-            //simulationName
+            idUser: params?.userId || null,
+            idStrategy: 'CM',
+            simulationName: `MA Crossover ${shortMa}/${longMa}`,
             symbol,
             startDate: startDate?.toISOString().split('T')[0] || 'auto',
             endDate: endDate?.toISOString().split('T')[0] || 'auto',
-            //amount
-            signals: [],
-            spects: params?.specs || 'SHORT:50&LONG:200',
-            chart_data: workingData,
-            //results
-            //percentageReturn
-            //DETAIL_ROW 
+            amount: amount,
+            signals: signals,
+            specs: params?.specs || `SHORT:${shortMa}&LONG:${longMa}`,
+            result: currentAmount,
+            percentageReturn: percentageReturn,
+            chart_data: priceData,
+            transactions: transactions,
+            DETAIL_ROW: [
+                {
+                    ACTIVED: false,
+                    DELETED: false,
+                    DETAIL_ROW_REG: [
+                        {
+                            CURRENT: true,
+                            REGDATE: new Date().toISOString(),
+                            REGTIME: new Date().toISOString(),
+                            REGUSER: "SYSTEM"
+                        }
+                    ]
+                }
+            ]
         };
       
         return JSON.stringify(result);
@@ -99,7 +148,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
     }
 
     // Calcular medias móviles
-    return workingData.map((item, index, array) => {
+    const dataWithMAs = workingData.map((item, index, array) => {
         const shortSlice = array.slice(Math.max(0, index - shortMa + 1), index + 1);
         const longSlice = array.slice(Math.max(0, index - longMa + 1), index + 1);
         
@@ -114,8 +163,139 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 longSlice.reduce((sum, p) => sum + p.close, 0) / longMa : null
         };
     }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
+
+    // 1. Identificar señales de cruce
+    const signals = [];
+    let currentPosition = null; // null, 'buy' o 'sell'
+    let entryPrice = 0;
+    let stopLoss = 0;
+    let takeProfit = 0;
+
+    for (let i = 1; i < dataWithMAs.length; i++) {
+        const prev = dataWithMAs[i-1];
+        const current = dataWithMAs[i];
+        
+        // Detectar cruce alcista (compra)
+        if (prev.short_ma < prev.long_ma && current.short_ma > current.long_ma) {
+            if (currentPosition !== 'buy') {
+                // Señal de compra
+                entryPrice = current.price_history.close;
+                stopLoss = findStopLoss('buy', dataWithMAs, i);
+                takeProfit = entryPrice + (2 * (entryPrice - stopLoss)); // Relación 2:1
+                
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'buy',
+                    price: entryPrice,
+                    reasoning: `Golden Cross: ${shortMa}MA crossed above ${longMa}MA`,
+                    stopLoss,
+                    takeProfit
+                });
+                
+                currentPosition = 'buy';
+            }
+        }
+        // Detectar cruce bajista (venta)
+        else if (prev.short_ma > prev.long_ma && current.short_ma < current.long_ma) {
+            if (currentPosition !== 'sell') {
+                // Señal de venta
+                entryPrice = current.price_history.close;
+                stopLoss = findStopLoss('sell', dataWithMAs, i);
+                takeProfit = entryPrice - (2 * (stopLoss - entryPrice)); // Relación 2:1
+                
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'sell',
+                    price: entryPrice,
+                    reasoning: `Death Cross: ${shortMa}MA crossed below ${longMa}MA`,
+                    stopLoss,
+                    takeProfit
+                });
+                
+                currentPosition = 'sell';
+            }
+        }
+        // Verificar si se activó stop-loss o take-profit
+        else if (currentPosition === 'buy') {
+            if (current.price_history.low <= stopLoss) {
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'sell',
+                    price: stopLoss,
+                    reasoning: `Stop-loss triggered at ${stopLoss}`,
+                    isStopLoss: true
+                });
+                currentPosition = null;
+            } else if (current.price_history.high >= takeProfit) {
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'sell',
+                    price: takeProfit,
+                    reasoning: `Take-profit triggered at ${takeProfit}`,
+                    isTakeProfit: true
+                });
+                currentPosition = null;
+            }
+        }
+        else if (currentPosition === 'sell') {
+            if (current.price_history.high >= stopLoss) {
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'buy',
+                    price: stopLoss,
+                    reasoning: `Stop-loss triggered at ${stopLoss}`,
+                    isStopLoss: true
+                });
+                currentPosition = null;
+            } else if (current.price_history.low <= takeProfit) {
+                signals.push({
+                    date: current.price_history.date,
+                    type: 'buy',
+                    price: takeProfit,
+                    reasoning: `Take-profit triggered at ${takeProfit}`,
+                    isTakeProfit: true
+                });
+                currentPosition = null;
+            }
+        }
+    }
+
+    // Calcular resultados finales si quedó posición abierta
+    if (currentPosition && signals.length > 0) {
+        const lastSignal = signals[signals.length - 1];
+        const lastPrice = dataWithMAs[dataWithMAs.length - 1].price_history.close;
+        
+        signals.push({
+            date: dataWithMAs[dataWithMAs.length - 1].price_history.date,
+            type: currentPosition === 'buy' ? 'sell' : 'buy',
+            price: lastPrice,
+            reasoning: `Final position closed at end of period`,
+            isFinal: true
+        });
+    }
+
+    return {
+        priceData: dataWithMAs,
+        signals: signals
+    };
 }
 
+// Función auxiliar para calcular el stop-loss
+function findStopLoss(type, data, currentIndex) {
+    const lookback = 20; // Cantidad de días para buscar mínimos/máximos
+    const startIndex = Math.max(0, currentIndex - lookback);
+    const slice = data.slice(startIndex, currentIndex);
+    
+    if (type === 'buy') {
+        // Para compras: stop-loss debajo del mínimo reciente
+        const minLow = Math.min(...slice.map(d => d.price_history.low));
+        return minLow * 0.99; // 1% debajo del mínimo
+    } else {
+        // Para ventas: stop-loss arriba del máximo reciente
+        const maxHigh = Math.max(...slice.map(d => d.price_history.high));
+        return maxHigh * 1.01; // 1% arriba del máximo
+    }
+}
 function parseSpecs(specsString) {
   const defaults = { short: 50, long: 200 };
   const result = { ...defaults };

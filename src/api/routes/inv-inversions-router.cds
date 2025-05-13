@@ -35,4 +35,11 @@ service PricesHistoryRoute @(path:'/api/inv') {
     )
     returns String;
 
+    //updateSimulation
+    @Core.Description: 'Actualizar nombre de simulación por ID'
+    @path: 'updatesimulation'
+    action updatesimulation(
+        id: String,
+        simulationName: String
+    ) returns String;
 };

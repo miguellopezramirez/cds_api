@@ -32,6 +32,24 @@ class InvestionsClass extends cds.ApplicationService{
 });
 
 
+        //updateSimulation
+        this.on('updatesimulation', async (req) => {
+            const { id, simulationName } = req.data;
+        
+            if (!id || !simulationName) {
+                req.error(400, 'Faltan parámetros: id y simulationName son requeridos.');
+                return;
+            }
+        
+            try {
+                const updated = await sercivioSimulacion.updateSimulationName(id, simulationName);
+                return updated;
+            } catch (err) {
+                console.error("Error en updatesimulation:", err.message);
+                req.error(500, err.message);
+            }
+        });
+        
         return await super.init();
     };
 };
