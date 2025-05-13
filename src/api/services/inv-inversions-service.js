@@ -28,6 +28,7 @@ async function GetAllPricesHistory(req) {
   }
 }
 
+// empiezo a documentar yo - aramis
 async function SimulateMACrossover(params) { 
     try {
         const symbol = params?.symbol || 'AAPL';
@@ -54,6 +55,8 @@ async function SimulateMACrossover(params) {
 
         const { priceData, signals } = calculateMovingAverageData(history, startDate, endDate, shortMa, longMa);
         
+        //carlos
+        // esta parte tú la explicas, creo que es importante manejarlo por separado, de aquí en adelante hasta que se termina la función
         // Calcular resultado financiero
         let currentAmount = amount;
         let shares = 0;
@@ -131,6 +134,7 @@ async function SimulateMACrossover(params) {
     }
 }
 
+//aquí igual, yo empiezo a documentar con lo que hice - aramis
 function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, longMa) {
     // Encontrar índice de inicio (retroceder 200 días)
     let startIndex = 0;
@@ -164,6 +168,8 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         };
     }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
 
+    // carlos
+    // y ya de aquí tú le sigues
     // 1. Identificar señales de cruce
     const signals = [];
     let currentPosition = null; // null, 'buy' o 'sell'
@@ -280,6 +286,8 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
     };
 }
 
+// carlos
+//esta la explicas tú
 // Función auxiliar para calcular el stop-loss
 function findStopLoss(type, data, currentIndex) {
     const lookback = 20; // Cantidad de días para buscar mínimos/máximos
@@ -296,6 +304,8 @@ function findStopLoss(type, data, currentIndex) {
         return maxHigh * 1.01; // 1% arriba del máximo
     }
 }
+
+//esta yo la explico - aramis
 function parseSpecs(specsString) {
   const defaults = { short: 50, long: 200 };
   const result = { ...defaults };
