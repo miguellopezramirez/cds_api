@@ -24,6 +24,13 @@ class InvestionsClass extends cds.ApplicationService{
         this.on('strategy', async (req) => {
             return servicio.GetAllInvestmentStrategies(req);
         })
+        this.on('deleteSimulation', async (req) => {
+  const idSimulation = req.req.query?.id;
+  const idUser = req.data?.idUser;
+
+  return await sercivioSimulacion.deleteSimulation(idSimulation, idUser);
+});
+
 
         return await super.init();
     };

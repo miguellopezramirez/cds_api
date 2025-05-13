@@ -26,4 +26,13 @@ service PricesHistoryRoute @(path:'/api/inv') {
     @path : 'strategy'
     function strategy()
     returns array of String;
+
+
+        @Core.Description:'delete simulation by id and user'
+    @path : 'deleteSimulation'
+    action deleteSimulation(
+        idUser : String
+    )
+    returns String;
+
 };
