@@ -365,5 +365,41 @@ async function GetAllInvestmentStrategies() {
     }
 }
 
+// CERF: Me confundi con los "simbolos" que era necesario traer, no lo borro por si acaso
+async function GetAllSymbols() {
+    try {
+       const symbols = await ZTSIMULATION.distinct('symbol');
+       return symbols;
+   } catch (error) {
+       throw new Error(`Error al obtener los símbolos: ${error.message}`);
+   }
+  }
+  
+  // CERF: Busca y trae simbolo e informacion de la empresa
+  async function GetAllCompanies(req) {
+  const keyword = req.data?.keyword || 'a';
+  const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${keyword}&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+  
+  try {
+   const response = await axios.get(url);
+   const data = response.data['bestMatches'];
+  
+   if (!data) return [];
+  
+   return data.map(entry => ({
+     symbol: entry['1. symbol'],
+     name: entry['2. name'],
+     type: entry['3. type'],
+     region: entry['4. region'],
+     marketOpen: entry['5. marketOpen'],
+     marketClose: entry['6. marketClose'],
+     timezone: entry['7. timezone'],
+     currency: entry['8. currency'],
+     matchScore: entry['9. matchScore']
+   }));
+  } catch (error) {
+   throw new Error(`Error al traer los símbolos: ${error.message}`);
+  }
+  }
 
-module.exports = { GetAllPricesHistory, SimulateMACrossover, GetAllInvestmentStrategies };
+module.exports = { GetAllPricesHistory, SimulateMACrossover, GetAllInvestmentStrategies, GetAllSymbols, GetAllCompanies };

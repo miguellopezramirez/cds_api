@@ -47,4 +47,14 @@ service PricesHistoryRoute @(path:'/api/inv') {
         id: String,
         simulationName: String
     ) returns String;
+
+
+    @Core.Description: 'get-all-symbols'
+    @path: 'symbols'
+    function symbols()
+    returns array of String;
+
+    @Core.Description:'Buscar empresas por símbolo o nombre'
+    @path: 'company'
+    function company(keyword: String) returns array of String;
 };
