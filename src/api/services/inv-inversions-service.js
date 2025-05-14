@@ -1,8 +1,8 @@
 const axios = require('axios');
 require('dotenv').config(); 
 const ztvalues = require('../models/mongodb/ztvalues');
-
-
+const Simulation = require('../models/mongodb/ztsimulation')
+;
 async function GetAllPricesHistory(req) {
   try {
     const symbol = req.req.query?.symbol || 'AAPL'; // Parámetro dinámico (ej: /pricehistory?symbol=TSLA)
@@ -28,126 +28,34 @@ async function GetAllPricesHistory(req) {
   }
 }
 
-async function SimulateMACrossover(params) { 
-    try {
-        const symbol = params?.symbol || 'AAPL';
-        const startDate = params?.startDate ? new Date(params.startDate) : null;
-        const endDate = params?.endDate ? new Date(params.endDate) : null;
-        const amount = params?.amount || 1000;
-        const { short: shortMa, long: longMa } = parseSpecs(params?.specs);
-        
-        // Llamada a Alpha Vantage
-        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
-        const response = await axios.get(url);
-        const timeSeries = response.data['Time Series (Daily)'];
+// Función auxiliar para calcular stop-loss
+function findStopLoss(type, data, currentIndex) {
+    const lookback = 20;
+    const startIndex = Math.max(0, currentIndex - lookback);
+    const slice = data.slice(startIndex, currentIndex);
     
-        // Transformar y filtrar por rango de fechas
-        let history = Object.entries(timeSeries)
-            .map(([date, data]) => ({
-            date: new Date(date),
-            open: parseFloat(data['1. open']),
-            high: parseFloat(data['2. high']),
-            low: parseFloat(data['3. low']),
-            close: parseFloat(data['4. close']),
-            volume: parseInt(data['5. volume'])
-        })).sort((a, b) => a.date - b.date);
-
-        const { priceData, signals } = calculateMovingAverageData(history, startDate, endDate, shortMa, longMa);
-        
-        // Calcular resultado financiero
-        let currentAmount = amount;
-        let shares = 0;
-        const transactions = [];
-        
-        signals.forEach(signal => {
-            if (signal.type === 'buy' && currentAmount > 0) {
-                shares = currentAmount / signal.price;
-                currentAmount = 0;
-                transactions.push({...signal, shares});
-            } else if (signal.type === 'sell' && shares > 0) {
-                currentAmount = shares * signal.price;
-                shares = 0;
-                transactions.push({...signal, proceeds: currentAmount});
-            }
-        });
-
-        // Si queda posición abierta, cerrarla al último precio
-        if (shares > 0) {
-            const lastPrice = priceData[priceData.length - 1].price_history.close;
-            currentAmount = shares * lastPrice;
-            transactions.push({
-                date: priceData[priceData.length - 1].price_history.date,
-                type: 'sell',
-                price: lastPrice,
-                reasoning: 'Final position closed',
-                proceeds: currentAmount,
-                isFinal: true
-            });
-        }
-
-        const profit = currentAmount - amount;
-        const percentageReturn = (profit / amount) * 100;
-
-        const result = {
-            idSimulation: `${symbol}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
-            idUser: params?.userId || null,
-            idStrategy: 'CM',
-            simulationName: `MA Crossover ${shortMa}/${longMa}`,
-            symbol,
-            startDate: startDate?.toISOString().split('T')[0] || 'auto',
-            endDate: endDate?.toISOString().split('T')[0] || 'auto',
-            amount: amount,
-            signals: signals,
-            specs: params?.specs || `SHORT:${shortMa}&LONG:${longMa}`,
-            result: currentAmount,
-            percentageReturn: percentageReturn,
-            chart_data: priceData,
-            transactions: transactions,
-            DETAIL_ROW: [
-                {
-                    ACTIVED: false,
-                    DELETED: false,
-                    DETAIL_ROW_REG: [
-                        {
-                            CURRENT: true,
-                            REGDATE: new Date().toISOString(),
-                            REGTIME: new Date().toISOString(),
-                            REGUSER: "SYSTEM"
-                        }
-                    ]
-                }
-            ]
-        };
-      
-        return JSON.stringify(result);
-    
-    } catch (e) {
-        console.error('AlphaVantage Error:', e);
-        return JSON.stringify({
-            success: false,
-            error: e.message,
-            stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
-        });
+    if (type === 'buy') {
+        const minLow = Math.min(...slice.map(d => d.price_history.low));
+        return minLow * 0.99;
+    } else {
+        const maxHigh = Math.max(...slice.map(d => d.price_history.high));
+        return maxHigh * 1.01;
     }
 }
 
 function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, longMa) {
-    // Encontrar índice de inicio (retroceder 200 días)
     let startIndex = 0;
     if (startDate) {
         startIndex = fullHistory.findIndex(item => item.date >= startDate);
         if (startIndex === -1) startIndex = fullHistory.length - 1;
-        // Retroceder los días necesarios para calcular MA larga
         startIndex = Math.max(0, startIndex - longMa);
     }
 
-    // Filtrar el rango completo necesario
     let workingData = fullHistory.slice(startIndex);
     if (endDate) {
         workingData = workingData.filter(item => item.date <= endDate);
     }
 
-    // Calcular medias móviles
     const dataWithMAs = workingData.map((item, index, array) => {
         const shortSlice = array.slice(Math.max(0, index - shortMa + 1), index + 1);
         const longSlice = array.slice(Math.max(0, index - longMa + 1), index + 1);
@@ -155,7 +63,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         return {
             price_history: {
                 ...item,
-                date: item.date.toISOString().split('T')[0]
+                date: item.date
             },
             short_ma: shortSlice.length >= shortMa ? 
                 shortSlice.reduce((sum, p) => sum + p.close, 0) / shortMa : null,
@@ -164,9 +72,8 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         };
     }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
 
-    // 1. Identificar señales de cruce
     const signals = [];
-    let currentPosition = null; // null, 'buy' o 'sell'
+    let currentPosition = null;
     let entryPrice = 0;
     let stopLoss = 0;
     let takeProfit = 0;
@@ -175,13 +82,11 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         const prev = dataWithMAs[i-1];
         const current = dataWithMAs[i];
         
-        // Detectar cruce alcista (compra)
         if (prev.short_ma < prev.long_ma && current.short_ma > current.long_ma) {
             if (currentPosition !== 'buy') {
-                // Señal de compra
                 entryPrice = current.price_history.close;
                 stopLoss = findStopLoss('buy', dataWithMAs, i);
-                takeProfit = entryPrice + (2 * (entryPrice - stopLoss)); // Relación 2:1
+                takeProfit = entryPrice + (2 * (entryPrice - stopLoss));
                 
                 signals.push({
                     date: current.price_history.date,
@@ -195,13 +100,11 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 currentPosition = 'buy';
             }
         }
-        // Detectar cruce bajista (venta)
         else if (prev.short_ma > prev.long_ma && current.short_ma < current.long_ma) {
             if (currentPosition !== 'sell') {
-                // Señal de venta
                 entryPrice = current.price_history.close;
                 stopLoss = findStopLoss('sell', dataWithMAs, i);
-                takeProfit = entryPrice - (2 * (stopLoss - entryPrice)); // Relación 2:1
+                takeProfit = entryPrice - (2 * (stopLoss - entryPrice));
                 
                 signals.push({
                     date: current.price_history.date,
@@ -215,7 +118,6 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 currentPosition = 'sell';
             }
         }
-        // Verificar si se activó stop-loss o take-profit
         else if (currentPosition === 'buy') {
             if (current.price_history.low <= stopLoss) {
                 signals.push({
@@ -260,7 +162,6 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         }
     }
 
-    // Calcular resultados finales si quedó posición abierta
     if (currentPosition && signals.length > 0) {
         const lastSignal = signals[signals.length - 1];
         const lastPrice = dataWithMAs[dataWithMAs.length - 1].price_history.close;
@@ -275,27 +176,20 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
     }
 
     return {
-        priceData: dataWithMAs,
+        priceData: dataWithMAs.map(item => ({
+            date: item.price_history.date,
+            open: item.price_history.open,
+            high: item.price_history.high,
+            low: item.price_history.low,
+            close: item.price_history.close,
+            volume: item.price_history.volume,
+            short_ma: item.short_ma,
+            long_ma: item.long_ma
+        })),
         signals: signals
     };
 }
 
-// Función auxiliar para calcular el stop-loss
-function findStopLoss(type, data, currentIndex) {
-    const lookback = 20; // Cantidad de días para buscar mínimos/máximos
-    const startIndex = Math.max(0, currentIndex - lookback);
-    const slice = data.slice(startIndex, currentIndex);
-    
-    if (type === 'buy') {
-        // Para compras: stop-loss debajo del mínimo reciente
-        const minLow = Math.min(...slice.map(d => d.price_history.low));
-        return minLow * 0.99; // 1% debajo del mínimo
-    } else {
-        // Para ventas: stop-loss arriba del máximo reciente
-        const maxHigh = Math.max(...slice.map(d => d.price_history.high));
-        return maxHigh * 1.01; // 1% arriba del máximo
-    }
-}
 function parseSpecs(specsString) {
   const defaults = { short: 50, long: 200 };
   const result = { ...defaults };
@@ -303,7 +197,7 @@ function parseSpecs(specsString) {
   if (!specsString) return result;
 
   const validKeys = new Set(['short', 'long']);
-  const minValues = { short: 5, long: 20 }; // Valores mínimos razonables
+  const minValues = { short: 5, long: 20 };
 
   specsString.split('&').forEach(part => {
     const [rawKey, value] = part.split(':');
@@ -313,13 +207,112 @@ function parseSpecs(specsString) {
     const numValue = parseInt(value);
     
     if (validKeys.has(key) && !isNaN(numValue)) {
-      result[key] = Math.max(minValues[key], numValue); // Asegurar valor mínimo
+      result[key] = Math.max(minValues[key], numValue);
     }
   });
 
   return result;
 }
 
+async function SimulateMACrossover(params) { 
+    try {
+        const symbol = params?.symbol || 'AAPL';
+        const startDate = params?.startDate ? new Date(params.startDate) : null;
+        const endDate = params?.endDate ? new Date(params.endDate) : null;
+        const amount = params?.amount || 1000;
+        const userId = params?.userId || 'system';
+        const { short: shortMa, long: longMa } = parseSpecs(params?.specs);
+        
+        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+        const response = await axios.get(url);
+        const timeSeries = response.data['Time Series (Daily)'];
+    
+        let history = Object.entries(timeSeries)
+            .map(([date, data]) => ({
+            date: new Date(date),
+            open: parseFloat(data['1. open']),
+            high: parseFloat(data['2. high']),
+            low: parseFloat(data['3. low']),
+            close: parseFloat(data['4. close']),
+            volume: parseInt(data['5. volume'])
+        })).sort((a, b) => a.date - b.date);
+
+        const { priceData, signals } = calculateMovingAverageData(history, startDate, endDate, shortMa, longMa);
+        
+        let currentAmount = amount;
+        let shares = 0;
+        const transactions = [];
+        
+        signals.forEach(signal => {
+            if (signal.type === 'buy' && currentAmount > 0) {
+                shares = currentAmount / signal.price;
+                currentAmount = 0;
+                transactions.push({...signal, shares});
+            } else if (signal.type === 'sell' && shares > 0) {
+                currentAmount = shares * signal.price;
+                shares = 0;
+                transactions.push({...signal, proceeds: currentAmount});
+            }
+        });
+
+        if (shares > 0) {
+            const lastPrice = priceData[priceData.length - 1].close;
+            currentAmount = shares * lastPrice;
+            transactions.push({
+                date: priceData[priceData.length - 1].date,
+                type: 'sell',
+                price: lastPrice,
+                reasoning: 'Final position closed',
+                proceeds: currentAmount,
+                isFinal: true
+            });
+        }
+
+        const profit = currentAmount - amount;
+        const percentageReturn = (profit / amount) * 100;
+
+        const simulationData = {
+            idSimulation: `${symbol}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
+            idUser: userId,
+            idStrategy: 'CM',
+            simulationName: `MA Crossover ${shortMa}/${longMa}`,
+            symbol,
+            startDate: startDate || new Date(priceData[0].date),
+            endDate: endDate || new Date(priceData[priceData.length - 1].date),
+            amount: amount,
+            signals: signals,
+            specs: params?.specs || `SHORT:${shortMa}&LONG:${longMa}`,
+            result: currentAmount,
+            percentageReturn: percentageReturn,
+            chart_data: priceData,
+            transactions: transactions,
+            DETAIL_ROW: [{
+                ACTIVED: false,
+                DELETED: false,
+                DETAIL_ROW_REG: [{
+                    CURRENT: true,
+                    REGDATE: new Date(),
+                    REGTIME: new Date(),
+                    REGUSER: "SYSTEM"
+                }]
+            }]
+        };
+
+        // Guardar en MongoDB
+        const newSimulation = new Simulation(simulationData);
+        await newSimulation.save();
+
+        return JSON.stringify(simulationData);
+    
+    } catch (e) {
+        console.error('Error in SimulateMACrossover:', e);
+        return JSON.stringify({
+            success: false,
+            error: e.message,
+            stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        });
+    }
+}
 // MALR: Función para cargar todas las estrategias de inversión en el front
 async function GetAllInvestmentStrategies() {
     try {
