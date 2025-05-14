@@ -5,18 +5,21 @@ const ztsimulation = require('../models/mongodb/ztsimulation');
  async function getAllSimulaciones(req) {
       try {
         // Verifica si se ha proporcionado un idUser en la consulta
-        const idUser =req.req.query?.idUser;
+        const idUser =req.req.body?.idUser;
+        const idSimulation = req.req.query?.id;
         
         // Crear una variable para almacenar la simulación
         let simulation;
         
         // Caso 1: Búsqueda por ID específico
-        if (idUser != null) {
-            simulation = await ztsimulation.findOne({idUser}).lean();
+        if (idSimulation != null) {
+            simulation = await ztsimulation.findOne({idSimulation}).lean();
+            console.log("idSimulation", idSimulation);
         }
         // Caso 2: Obtener todos los registros (con paginación)
         else {
-           simulation = await ztsimulation.find().lean();
+           simulation = await ztsimulation.find({idUser}).lean();
+           console.log("otro", idUser);
         }
 
         return (simulation);
