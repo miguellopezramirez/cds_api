@@ -31,6 +31,13 @@ class InvestionsClass extends cds.ApplicationService{
   return await sercivioSimulacion.deleteSimulation(idSimulation, idUser);
 });
 
+    // getSimulation
+    // Se espera que el idUser venga como un parámetro de consulta o sin este par un Get all
+    this.on ('getSimulation', async (req) => {
+        return sercivioSimulacion.getAllSimulaciones(req);
+    });
+
+
 
         //updateSimulation
         this.on('updatesimulation', async (req) => {
