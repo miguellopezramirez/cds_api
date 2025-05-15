@@ -57,4 +57,19 @@ service PricesHistoryRoute @(path:'/api/inv') {
     @Core.Description:'Buscar empresas por símbolo o nombre'
     @path: 'company'
     function company(keyword: String) returns array of String;
+    
+    @Core.Description:'Calcular SMA (Simple Moving Averages) para SHORT y LONG'
+    @path: 'calculateSMA'
+    action calculateSMA(
+        symbol: String,
+        startDate: String,
+        endDate: String,
+        specs: String
+    ) returns array of {
+        date: DateTime;
+        close: Decimal;
+        short: Decimal;
+        long: Decimal
+};
+
 };
