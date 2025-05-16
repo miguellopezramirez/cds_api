@@ -1,0 +1,25 @@
+# Node modules (serán instalados en la imagen)
+node_modules
+
+# Archivos y carpetas temporales
+npm-debug.log
+yarn-error.log
+.env.local
+*.bat
+*.sh
+
+# Carpeta de build local (si existe)
+gen
+dist
+tmp
+coverage
+
+# Git
+.git
+.gitignore
+
+# Archivos de tu editor
+.vscode
+.idea
+.DS_Store
+Thumbs.db

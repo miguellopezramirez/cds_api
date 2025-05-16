@@ -11,7 +11,7 @@
   "dependencies": {
     "@babel/runtime": "^7.27.0",
     "@dotenvx/dotenvx": "1.39.0",
-    "@sap/cds": "8",
+    "@sap/cds": "^8.9.3",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "express": "4",
@@ -30,9 +30,9 @@
   "scripts": {
     "start": "cds-serve",
     "dev": "cds watch",
-    "bat": "my-script.bat",
-    "build": "cds build --clean && npm run bat",
-    "build-docker": "cds build --clean"
+    "build": "cds build --clean &",
+    "build-docker": "cds build --clean",
+    "start-docker": "cds-serve"
   },
   "cds": {
     "folders": {
