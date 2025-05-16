@@ -30,7 +30,7 @@
   "scripts": {
     "start": "cds-serve",
     "dev": "cds watch",
-    "build": "cds build --clean &",
+    "build": "cds build --clean",
     "build-docker": "cds build --clean",
     "start-docker": "cds-serve"
   },

@@ -15,7 +15,7 @@ COPY . .
 RUN ls -l node_modules/.bin
 
 # Ejecuta el build CAP desde el binario local
-RUN npm run build-docker
+# RUN npm run build-docker
 
 # Exponemos el puerto del CAP
 EXPOSE 4004
