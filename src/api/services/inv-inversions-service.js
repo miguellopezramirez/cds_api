@@ -1,7 +1,7 @@
 const axios = require('axios');
 require('dotenv').config(); 
 const ztvalues = require('../models/mongodb/ztvalues');
-const Simulation = require('../models/mongodb/ztsimulation')
+const Simulation = require('../models/mongodb/ztsimulation');
 ;
 async function GetAllPricesHistory(req) {
   try {
