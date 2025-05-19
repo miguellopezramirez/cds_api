@@ -1,0 +1,32 @@
+trigger:
+- main
+
+variables:
+  tag: '$(Build.BuildId)'
+  imageName: 'ghcr.io/MiguelLopezRamirez/cds_api'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: DockerInstaller@0
+  displayName: 'Install Docker'
+  inputs:
+    dockerVersion: '20.10.7'
+
+- script: |
+    echo "Construyendo imagen con tags $(tag) y latest..."
+    docker build -t $(imageName):$(tag) -t $(imageName):latest .
+  displayName: 'Build Docker Image with multiple tags'
+
+- script: |
+    echo $(CR_PAT) | docker login ghcr.io -u MiguelLopezRamirez --password-stdin
+  displayName: 'Login to GitHub Container Registry'
+  env:
+    CR_PAT: $(CR_PAT)
+
+- script: |
+    echo "Pusheando tags $(tag) y latest..."
+    docker push $(imageName):$(tag)
+    docker push $(imageName):latest
+  displayName: 'Push both tags to GHCR'

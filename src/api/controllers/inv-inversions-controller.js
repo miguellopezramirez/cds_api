@@ -56,9 +56,37 @@ class InvestionsClass extends cds.ApplicationService{
                 req.error(500, err.message);
             }
         });
+
+        this.on('symbols', async (req) => {
+            try {
+                const symbols = await servicio.GetAllSymbols();
+                return symbols; 
+            } catch (error) {
+                throw new Error(`Error al traer los símbolos: ${error.message}`);
+            }
+        });
+
+        this.on('company', async (req) => {
+            return await servicio.GetAllCompanies(req);
+        });
+
+        this.on('calculateSMA', async (req) => {
+            const { symbol, startDate, endDate, specs } = req.data;
+          
+            const resultado = await servicio.calcularSoloSMA({
+              symbol,
+              startDate,
+              endDate,
+              specs
+            });
+          
+            return resultado;
+          });
         
         return await super.init();
     };
 };
+
+
 
 module.exports = InvestionsClass;

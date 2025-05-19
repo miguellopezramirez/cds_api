@@ -71,7 +71,6 @@ const updateSimulationName = async (idSimulation, newName) => {
 };
 
 
-
 module.exports = {
   updateSimulationName,
   deleteSimulation,

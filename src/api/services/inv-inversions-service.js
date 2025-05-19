@@ -365,5 +365,104 @@ async function GetAllInvestmentStrategies() {
     }
 }
 
+// CERF: Me confundi con los "simbolos" que era necesario traer, no lo borro por si acaso
+async function GetAllSymbols() {
+    try {
+       const symbols = await ZTSIMULATION.distinct('symbol');
+       return symbols;
+   } catch (error) {
+       throw new Error(`Error al obtener los símbolos: ${error.message}`);
+   }
+  }
+  
+  // CERF: Busca y trae simbolo e informacion de la empresa
+  async function GetAllCompanies(req) {
+  const keyword = req.data?.keyword || 'a';
+  const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${keyword}&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+  
+  try {
+   const response = await axios.get(url);
+   const data = response.data['bestMatches'];
+  
+   if (!data) return [];
+  
+   return data.map(entry => ({
+     symbol: entry['1. symbol'],
+     name: entry['2. name'],
+     type: entry['3. type'],
+     region: entry['4. region'],
+     marketOpen: entry['5. marketOpen'],
+     marketClose: entry['6. marketClose'],
+     timezone: entry['7. timezone'],
+     currency: entry['8. currency'],
+     matchScore: entry['9. matchScore']
+   }));
+  } catch (error) {
+   throw new Error(`Error al traer los símbolos: ${error.message}`);
+  }
+}
+  
 
-module.exports = { GetAllPricesHistory, SimulateMACrossover, GetAllInvestmentStrategies };
+////////////////////////
+
+// Función para calcular SMA
+function calcularSMA(data, periodo) {
+  const sma = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < periodo - 1) {
+      sma.push(null);
+      continue;
+    }
+    const ventana = data.slice(i - periodo + 1, i + 1);
+    const suma = ventana.reduce((acc, d) => acc + d.close, 0);
+    sma.push(suma / periodo);
+  }
+  return sma;
+}
+
+// Función principal de cálculo
+async function calcularSoloSMA({ symbol = 'AAPL', startDate, endDate, specs }) {
+  try {
+    const { short, long } = parseSpecs(specs);
+
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+    const response = await axios.get(url);
+    const timeSeries = response.data['Time Series (Daily)'];
+
+    if (!timeSeries) throw new Error('Datos no disponibles');
+
+    let history = Object.entries(timeSeries).map(([date, data]) => ({
+      date: new Date(date),
+      close: parseFloat(data['4. close']),
+    }));
+
+    // Ordenar por fecha ascendente
+    history = history.sort((a, b) => a.date - b.date);
+
+    // Filtrar fechas si se pasan
+    const filtered = history.filter(d => {
+      const date = new Date(d.date);
+      return (!startDate || date >= new Date(startDate)) &&
+             (!endDate || date <= new Date(endDate));
+    });
+
+    // Calcular SMA
+    const smaShort = calcularSMA(filtered, short);
+    const smaLong = calcularSMA(filtered, long);
+
+    // Armar respuesta combinada
+    const resultado = filtered.map((item, idx) => ({
+      date: item.date,
+      close: item.close,
+      short: smaShort[idx],
+      long: smaLong[idx]
+    }));
+
+    return resultado;
+  } catch (error) {
+    console.error('Error en calcularSoloSMA:', error.message);
+    throw new Error('Error al calcular SMA: ' + error.message);
+  }
+}
+
+module.exports = { GetAllPricesHistory, SimulateMACrossover, GetAllInvestmentStrategies, GetAllSymbols, GetAllCompanies, calcularSoloSMA  };
