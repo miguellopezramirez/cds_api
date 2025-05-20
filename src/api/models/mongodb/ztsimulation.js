@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const DetailRowRegSchema = new mongoose.Schema({
   CURRENT: { type: Boolean, required: true },
   REGDATE: { type: Date, required: true },
-  REGTIME: { type: Date, required: true },
+  REGTIME: { type: String, required: true },
   REGUSER: { type: String, required: true }
 }, { _id: false });
 

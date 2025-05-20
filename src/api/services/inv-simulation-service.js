@@ -1,4 +1,12 @@
 const ztsimulation = require('../models/mongodb/ztsimulation');
+//funciones date 
+function formatDate(date) {
+  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function formatTime(date) {
+  return date.toTimeString().split(' ')[0]; // HH:mm:ss
+}
 
 // 🔍 Obtener simulaciones
 async function getAllSimulaciones(req) {
@@ -75,17 +83,58 @@ async function deleteSimulation(idSimulation, idUser, type = "fisic") {
 
   throw new Error("Tipo de borrado no reconocido. Usa 'fisic' o 'logic'.");
 }
-// ✏️ Actualizar nombre
-const updateSimulationName = async (idSimulation, newName) => {
-  if (!idSimulation || !newName) throw new Error("Faltan parámetros obligatorios");
-  const updated = await ztsimulation.findOneAndUpdate(
-    { idSimulation },
-    { simulationName: newName },
-    { new: true }
-  );
-  if (!updated) throw new Error("Simulación no encontrada");
-  return updated;
+
+// ✏️ Actualizar nombre Y registrar nueva modificación
+const updateSimulationName = async (idSimulation, newName, idUser) => {
+  if (!idSimulation || !newName || !idUser) {
+    throw new Error("Faltan parámetros obligatorios: idSimulation, newName o idUser");
+  }
+
+  const simulation = await ztsimulation.findOne({ idSimulation });
+  if (!simulation) throw new Error("Simulación no encontrada");
+
+  // Actualizar nombre
+  simulation.simulationName = newName;
+
+  // Crear nuevo registro
+  const now = new Date();
+  const newRegistro = {
+    CURRENT: true,
+    REGDATE: formatDate(now),
+    REGTIME: formatTime(now),
+    REGUSER: idUser
+  };
+
+  // Inactivar anteriores
+  if (!simulation.DETAIL_ROW || simulation.DETAIL_ROW.length === 0) {
+    simulation.DETAIL_ROW = [{
+      ACTIVED: true,
+      DELETED: false,
+      DETAIL_ROW_REG: [newRegistro]
+    }];
+  } else {
+    const detalle = simulation.DETAIL_ROW[0];
+
+    if (!detalle.DETAIL_ROW_REG) {
+      detalle.DETAIL_ROW_REG = [];
+    } else {
+      detalle.DETAIL_ROW_REG.forEach(r => r.CURRENT = false);
+    }
+
+    detalle.DETAIL_ROW_REG.push(newRegistro);
+    detalle.ACTIVED = true;
+    detalle.DELETED = false;
+  }
+
+  await simulation.save();
+
+  return {
+    message: "Simulación actualizada correctamente",
+    idSimulation: simulation.idSimulation,
+    newName: simulation.simulationName
+  };
 };
+
 
 module.exports = {
   updateSimulationName,

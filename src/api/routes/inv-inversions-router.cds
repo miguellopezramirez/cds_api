@@ -44,9 +44,11 @@ service PricesHistoryRoute @(path:'/api/inv') {
     @Core.Description: 'Actualizar nombre de simulación por ID'
     @path: 'updatesimulation'
     action updatesimulation(
-        id: String,
-        simulationName: String
+    id: String,
+    simulationName: String,
+    idUser: String
     ) returns String;
+
 
 
     @Core.Description: 'get-all-symbols'
