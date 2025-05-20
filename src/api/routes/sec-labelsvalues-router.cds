@@ -22,7 +22,7 @@ service catalogos @(path:'/api/catalogos') {
     // returns array of labels;
 
     // Ruta para agregar un valor a un catálogo
-    @Core.Description: 'Add a value to a label'
+    @Core.Description: 'd aAd value to a label'
     @path: 'createLabel'
     action createLabel(label: labels, value: values, type: Integer) 
     returns {

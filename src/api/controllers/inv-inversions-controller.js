@@ -24,12 +24,15 @@ class InvestionsClass extends cds.ApplicationService{
         this.on('strategy', async (req) => {
             return servicio.GetAllInvestmentStrategies(req);
         })
-        this.on('deleteSimulation', async (req) => {
+        //delete
+ this.on('deleteSimulation', async (req) => {
   const idSimulation = req.req.query?.id;
   const idUser = req.data?.idUser;
+  const tipo = req.req.query?.type || "fisic"; // 👈 Nuevo parámetro: "logic" o "fisic"
 
-  return await sercivioSimulacion.deleteSimulation(idSimulation, idUser);
+  return await sercivioSimulacion.deleteSimulation(idSimulation, idUser, tipo);
 });
+
 
     // getSimulation
     // Se espera que el idUser venga como un parámetro de consulta o sin este par un Get all
