@@ -13,9 +13,21 @@ class InvestionsClass extends cds.ApplicationService{
     async init (){
 
         this.on('getAllLabels', async (req)=> {
+            try {
+                const {type} = req.data;
+                if (type!== '') {
+                return servicio.GetAllLabelsValues(req);
+                }else {
+                    throw ( {code: 400, message: "Falta el type para values o labels"} );
+                }
+
+            }catch (error) {    
+                // console.log("Error al procesar la solicitud:", error.code, error.message);  // Registra el error completo
+                req.error(error.code || 500, error.message || "Error inesperado");
+            }
             
             //llamada al metodo de servicio y retorna el resultado de la ruta
-           return servicio.GetAllLabelsValues(req);
+          
         });
 
         // this.on("addone", async (req)=>{

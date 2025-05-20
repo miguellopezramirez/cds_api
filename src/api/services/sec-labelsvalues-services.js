@@ -4,40 +4,60 @@ const ztroles = require('../models/mongodb/ztroles')
 
 async function GetAllLabelsValues(req) {
     try {
-        const type = parseInt(req.req.query?.type);
+        const query = req.req.query;
+        const type = query?.type;
 
-        if (type == 1) {
-            
-            return getLabels(req);
-        } else if (type == 2) {
-            
-            return getValues(req)
+        if (type === 'label') {
+            const labelId = query.id;
+            if (labelId) {
+                return await getLabelById(labelId);
+            } else {
+                return await getAllLabels();
+            }
+
+        } else if (type === 'value') {
+            const valueId = query.id;
+            const labelId = query.labelid;
+
+            if (valueId) {
+                return await getValueById(valueId);
+            } else if (labelId) {
+                return await getValuesByLabel(labelId);
+            } else {
+                return await getAllValues();
+            }
+
         } else {
-            // Podés personalizar esta parte según tu API
-            return { message: "Parámetro 'type' no válido. Usa 1 para labels o 2 para values." };
+            throw ({code: 400, message:"Parámetro 'type' no válido. Usa 'label' o 'value'." });
         }
     } catch (error) {
         throw error;
     }
 }
 
-async function getLabels(req) {
-    try {
-        const labels = await ztlabels.find().lean();
-        return (labels);
-    } catch (error) {
-        throw error;
-    }
+
+// LABELS
+async function getAllLabels() {
+    return await ztlabels.find({}).lean();
 }
 
-async function getValues(req) {
-    try {
-        const values = await ztvalues.find().lean();
-        return (values);
-    } catch (error) {
-        throw error;
-    }
+async function getLabelById(labelId) {
+    return await ztlabels.findOne({ LABELID: labelId }).lean();
 }
+
+// VALUES
+async function getAllValues() {
+    return await ztvalues.find({}).lean();
+}
+
+async function getValueById(valueId) {
+    return await ztvalues.findOne({ VALUEID: valueId }).lean();
+}
+
+async function getValuesByLabel(labelId) {
+    return await ztvalues.find({ LABELID: labelId }).lean();
+}
+
 
 // Patch de labels y values
 // Patch para labels y values
