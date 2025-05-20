@@ -83,7 +83,6 @@ async function UpdateLabelsValues(req) {
 
 //POST
 async function PostLabelsValues(req) {
-
     const type = parseInt(req.data.type);  // Usar req.data para acceder al cuerpo de la solicitud
 
     if (type === 1) {
@@ -99,15 +98,18 @@ async function PostLabelsValues(req) {
 
         const newLabel = new ztlabels(labelData);
         await newLabel.save();
+        return { success: true, message: "Label creado exitosamente" };
 
-        return {success: true, message: "Label creado exitosamente" };
-
-          
-              } 
-    else if (type === 2) {
+    } else if (type === 2) {
         const valueData = req.data.value;
         if (!valueData || !valueData.VALUEID || !valueData.LABELID) {
             return { message: "Se requiere un objeto 'value' con VALUEID y LABELID." };
+        }
+
+        // ✅ Verificar que exista el LABELID antes de crear el value
+        const labelExists = await ztlabels.findOne({ LABELID: valueData.LABELID }).lean();
+        if (!labelExists) {
+            return { message: `No existe un label con LABELID: ${valueData.LABELID}` };
         }
 
         const existingValue = await ztvalues.findOne({ VALUEID: valueData.VALUEID }).lean();
@@ -117,12 +119,13 @@ async function PostLabelsValues(req) {
 
         const newValue = new ztvalues(valueData);
         await newValue.save();
-        return {success: true, message: "Value creado exitosamente" };
-    } 
-    else {
+        return { success: true, message: "Value creado exitosamente" };
+
+    } else {
         return { message: "Parámetro 'type' no válido. Usa 1 para labels o 2 para values." };
     }
 }
+
 
 
 // Actualización de Labels
