@@ -59,7 +59,7 @@ async function deleteSimulation(idSimulation, idUser, type = "fisic") {
       CURRENT: true,
       REGDATE: now,
       REGTIME: now,
-      REGUSER: "MIGUEL"
+      REGUSER: idUser
     };
 
     // Inactivar registros actuales
