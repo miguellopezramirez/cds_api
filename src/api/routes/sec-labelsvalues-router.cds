@@ -26,7 +26,7 @@ service catalogos @(path:'/api/catalogos') {
     // Ruta para agregar un valor a un catálogo
     @Core.Description: 'd aAd value to a label'
     @path: 'createLabel'
-    action createLabel(label: array of label, value: array of value_, type: Integer) 
+    action createLabel(labels: array of label, values: array of value_) 
     returns {
         success: Boolean;
         message: String;
@@ -36,7 +36,7 @@ service catalogos @(path:'/api/catalogos') {
     // Ruta para actualizar un catálogo y un valor
     @Core.Description: 'Update a label and value'
     @path: 'updateLabel'
-    action updateLabel(label: label, value: value_)
+    action updateLabel(labels: array of label, values: array of value_)
     returns {
         success: Boolean;
         message: String;
