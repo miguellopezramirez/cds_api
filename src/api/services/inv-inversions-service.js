@@ -234,7 +234,7 @@ async function SimulateMACrossover(params) {
             "FALTAN PARÁMETROS REQUERIDOS EN EL CUERPO DE LA SOLICITUD: 'SYMBOL', 'STARTDATE', 'ENDDATE', 'AMOUNT', 'USERID'."
           );
         }
-        const { SHORT_MA: SHORT_MA, LONG_MA: LONG_MA } = parseSpecs(SPECS);
+        const { SHORT_MA: shortMa, LONG_MA: longMa } = parseSpecs(SPECS);
         
         const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${SYMBOL}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
         const response = await axios.get(url);
@@ -242,42 +242,42 @@ async function SimulateMACrossover(params) {
     
         let history = Object.entries(timeSeries)
             .map(([date, data]) => ({
-            DATE: new Date(date),
-            OPEN: parseFloat(data['1. open']),
-            HIGH: parseFloat(data['2. high']),
-            LOW: parseFloat(data['3. low']),
-            CLOSE: parseFloat(data['4. close']),
-            VOLUME: parseInt(data['5. volume'])
-        })).sort((a, b) => a.DATE - b.DATE);
+            date: new Date(date),
+            open: parseFloat(data['1. open']),
+            high: parseFloat(data['2. high']),
+            low: parseFloat(data['3. low']),
+            close: parseFloat(data['4. close']),
+            volume: parseInt(data['5. volume'])
+        })).sort((a, b) => a.date - b.date);
 
-        const { priceData, signals } = calculateMovingAverageData(history, STARTDATE, ENDDATE, SHORT_MA, LONG_MA);
+        const { priceData, signals } = calculateMovingAverageData(history, STARTDATE, ENDDATE, shortMa, longMa);
         
         let currentAmount = AMOUNT;
         let shares = 0;
         const transactions = [];
         
         signals.forEach(signal => {
-            if (signal.TYPE === 'buy' && currentAmount > 0) {
-                shares = currentAmount / signal.PRICE;
+            if (signal.type === 'buy' && currentAmount > 0) {
+                shares = currentAmount / signal.price;
                 currentAmount = 0;
-                transactions.push({...signal, SHARES: shares});
-            } else if (signal.TYPE === 'sell' && shares > 0) {
-                currentAmount = shares * signal.PRICE;
+                transactions.push({...signal, shares});
+            } else if (signal.type === 'sell' && shares > 0) {
+                currentAmount = shares * signal.price;
                 shares = 0;
-                transactions.push({...signal, PROCEEDS: currentAmount});
+                transactions.push({...signal, proceeds: currentAmount});
             }
         });
 
         if (shares > 0) {
-            const lastPrice = priceData[priceData.length - 1].CLOSE;
+            const lastPrice = priceData[priceData.length - 1].close;
             currentAmount = shares * lastPrice;
             transactions.push({
-                DATE: priceData[priceData.length - 1].DATE,
-                TYPE: 'sell',
-                PRICE: lastPrice,
-                REASONING: 'Final position closed',
-                PROCEEDS: currentAmount,
-                ISFINAL: true
+                date: priceData[priceData.length - 1].date,
+                type: 'sell',
+                price: lastPrice,
+                reasoning: 'Final position closed',
+                proceeds: currentAmount,
+                isFinal: true
             });
         }
 
@@ -286,54 +286,37 @@ async function SimulateMACrossover(params) {
 
         const simulationData = {
             SIMULATIONID: `${SYMBOL}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
-            USERID: USERID,
+            USERID,
             STRATEGY: 'CM',
-            SIMULATIONNAME: `MA Crossover ${SHORT_MA}/${LONG_MA}`,
-            SYMBOL: SYMBOL,
-            STARTDATE: STARTDATE || new Date(priceData[0].DATE),
-            ENDDATE: ENDDATE || new Date(priceData[priceData.length - 1].DATE),
+            SIMULATIONNAME: `MA Crossover ${shortMa}/${longMa}`,
+            SYMBOL,
+            STARTDATE: STARTDATE || new Date(priceData[0].date),
+            ENDDATE: ENDDATE || new Date(priceData[priceData.length - 1].date),
             AMOUNT: AMOUNT,
-            SIGNALS: signals.map(signal => ({
-                DATE: signal.DATE,
-                TYPE: signal.TYPE,
-                PRICE: signal.PRICE,
-                REASONING: signal.REASONING,
-                SHARES: signal.SHARES || 0
-            })),
-            SPECS: [
-                { INDICATOR: 'SHORT', VALUE: SHORT_MA },
-                { INDICATOR: 'LONG', VALUE: LONG_MA }
-            ],
+            SIGNALS: signals,
+            SPECS: SPECS || `SHORT:${shortMa}&LONG:${longMa}`,
+            //result: currentAmount,
+            //percentageReturn: percentageReturn,
             SUMMARY: {
-                TOTAL_BOUGHT_UNITS: transactions.filter(t => t.TYPE === 'buy').reduce((sum, t) => sum + t.SHARES, 0),
-                TOTAL_SOLDUNITS: transactions.filter(t => t.TYPE === 'sell').reduce((sum, t) => sum + t.SHARES, 0),
+                TOTAL_BOUGHT_UNITS: signals.filter(s => s.type === 'buy').reduce((acc, s) => acc + s.shares, 0),
+                TOTAL_SOLDUNITS: signals.filter(s => s.type === 'sell').reduce((acc, s) => acc + s.shares, 0),
                 REMAINING_UNITS: shares,
                 FINAL_CASH: currentAmount,
-                FINAL_VALUE: shares > 0 ? shares * priceData[priceData.length - 1].CLOSE : currentAmount,
-                FINAL_BALANCE: currentAmount + (shares > 0 ? shares * priceData[priceData.length - 1].CLOSE : 0),
+                FINAL_VALUE: 0, //currentAmount + (shares * priceData[priceData.length - 1].close),
+                FINAL_BALANCE: 0, //currentAmount + (shares * priceData[priceData.length - 1].close),
                 REAL_PROFIT: profit,
                 PERCENTAGE_RETURN: percentageReturn
             },
-            CHART_DATA: priceData.map(data => ({
-                DATE: data.DATE,
-                OPEN: data.OPEN,
-                HIGH: data.HIGH,
-                LOW: data.LOW,
-                CLOSE: data.CLOSE,
-                VOLUME: data.VOLUME,
-                INDICATORS: [
-                    { INDICATOR: 'SHORT_MA', VALUE: data.SHORT_MA },
-                    { INDICATOR: 'LONG_MA', VALUE: data.LONG_MA }
-                ]
-            })),
+            CHART_DATA: priceData,
+            //transactions: transactions,
             DETAIL_ROW: {
                 ACTIVED: true,
                 DELETED: false,
                 DETAIL_ROW_REG: [{
                     CURRENT: true,
                     REGDATE: new Date(),
-                    REGTIME: new Date().toTimeString().split(' ')[0],
-                    REGUSER: USERID
+                    REGTIME: new Date(),
+                    REGUSER: "SYSTEM"
                 }]
             }
         };

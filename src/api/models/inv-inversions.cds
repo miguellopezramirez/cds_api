@@ -40,8 +40,8 @@ entity SIMULATION {
         SPECS          : array of INDICATOR;
         SIGNALS        : array of SIGNAL;
         SUMMARY        : SUMMARY;         // OBJETO DE RESUMEN
-        CHART_DATA     : array of CHARTDATA; // DATOS PARA EL GRÁFICO
-        DETAIL_ROW     : array of DETAILROW; // DETALLES DE REGISTRO
+        CHART_DATA     : array of CHART_DATA; // DATOS PARA EL GRÁFICO
+        DETAIL_ROW     : array of DETAIL_ROW; // DETALLES DE REGISTRO
 }
 
 // TIPO PARA LAS SEÑALES DE COMPRA/VENTA
@@ -66,7 +66,7 @@ type SUMMARY {
 }
 
 // TIPO PARA LOS DATOS DEL GRÁFICO
-type CHARTDATA {
+type CHART_DATA {
     DATE       : DateTime;           // FORMATO ISO 8601
     OPEN       : Decimal(10, 2);
     HIGH       : Decimal(10, 2);
@@ -83,14 +83,14 @@ type INDICATOR {
 }
 
 // TIPO PARA EL DETALLE DE LA FILA (DETAIL_ROW)
-type DETAILROW {
+type DETAIL_ROW {
     ACTIVED        : Boolean;
     DELETED        : Boolean;
-    DETAIL_ROW_REG : array of DETAILROWREG;
+    DETAIL_ROW_REG : array of DETAIL_ROW_REG;
 }
 
 // TIPO PARA LOS REGISTROS DENTRO DE DETAIL_ROW_REG
-type DETAILROWREG {
+type DETAIL_ROW_REG {
     CURRENT : Boolean;
     REGDATE : DateTime;
     REGTIME : String; // "HH:MM:SS"
