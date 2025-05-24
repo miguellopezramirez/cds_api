@@ -3,7 +3,7 @@ using {inv as myph} from '../models/inv-inversions';
 @impl: 'src/api/controllers/inv-inversions-controller.js'
 service PricesHistoryRoute @(path:'/api/inv') {
     entity priceshistory as projection on myph.priceshistory;
-    entity simulations as projection on myph.simulations;
+    entity simulations as projection on myph.SIMULATION;
 
     @Core.Description:'get-all-prices-history'
     @path : 'pricehistory'
@@ -12,16 +12,7 @@ service PricesHistoryRoute @(path:'/api/inv') {
 
     @Core.Description:'Simulate MA Crossover strategy'
     @path: 'simulation'
-    action simulation(
-        strategy: String,
-        symbol: String, 
-        startDate: String,
-        endDate: String,
-        amount: Decimal,
-        userId: String,
-        specs: String,
-    ) 
-    returns String;
+    action simulation(SIMULATION: simulations) returns array of simulations;
 
     @Core.Description:'get-all-strategys'
     @path : 'strategy'

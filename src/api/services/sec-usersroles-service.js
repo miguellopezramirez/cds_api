@@ -11,7 +11,7 @@ async function PatchUser(req) {
     try {
         //Validar que el usuario exista
         const user = await ztusers.findOne({ USERID: id });
-        if (!user || (user.DETAIL_ROW?.DELETED === true)) 
+        if (!user || (user.DETAIL_ROW?.DELETED === true && !Object.keys(updates).every(key => key === 'USERID'))) 
             throw new Error(`Usuario con USERID ${id} no encontrado`); //Es el mismo mensaje de error si el usuario fue eliminado lógica o físicamente, o si nunca existió. 
         
         //Si se modificará un rol, validar que el rol exista
@@ -23,8 +23,9 @@ async function PatchUser(req) {
         if (Object.keys(updates).every(key => key === 'USERID')) {
             updates.DETAIL_ROW = {
                 ...user.DETAIL_ROW, 
-                DELETED: true,      
-                ACTIVED: false
+                // Si el rol fue eliminado lógicamente, lo activamos
+                DELETED: !user.DETAIL_ROW?.DELETED,
+                ACTIVED: !user.DETAIL_ROW?.ACTIVED
             };
         }
         else {
@@ -41,9 +42,8 @@ async function PatchUser(req) {
         );
 
         //Actualizar datos
-        const result = await ztusers.updateOne({ USERID: id }, { $set: updates });
-        return { success: true, modifiedCount: result.modifiedCount };
-
+        await ztusers.updateOne({ USERID: id }, { $set: updates });
+        return { success: true, message: `El usuario ${id} ha sido modificado correctamente.` };;
     } catch (error) {
         console.error("Error al actualizar el usuario: ", error.message);
         throw error;
@@ -59,7 +59,9 @@ async function PatchRole(req) {
     try {
         // Verifica que el rol exista
         const role = await ztroles.findOne({ ROLEID: id });
-        if (!role || (role.DETAIL_ROW?.DELETED === true))
+        // Si no existe o fue eliminado lógicamente, lanza un error
+        // Se verifica si el rol fue eliminado lógicamente y si no se está intentando modificar el ROLEID
+        if (!role || (role.DETAIL_ROW?.DELETED === true && !Object.keys(updates).every(key => key === 'ROLEID')))
             throw { code: 'ROLE_NOT_FOUND', message: `Rol con ROLEID ${id} no encontrado` };
 
         // Si se modifican procesos o privilegios validar que existan
@@ -71,8 +73,9 @@ async function PatchRole(req) {
         if (Object.keys(updates).every(key => key === 'ROLEID')) {
             updates.DETAIL_ROW = {
                 ...role.DETAIL_ROW,
-                DELETED: true,
-                ACTIVED: false
+                // Si el rol fue eliminado lógicamente, lo activamos
+                DELETED: !role.DETAIL_ROW?.DELETED,
+                ACTIVED: !role.DETAIL_ROW?.ACTIVED
             };
         } else {
             updates.DETAIL_ROW = {
@@ -88,8 +91,8 @@ async function PatchRole(req) {
         );
 
         // Actualizar datos
-        const result = await ztroles.updateOne({ ROLEID: id }, { $set: updates });
-        return { success: true, modifiedCount: result.modifiedCount };
+        await ztroles.updateOne({ ROLEID: id }, { $set: updates });
+        return { success: true, message: `El rol ${id} ha sido modificado correctamente.` };
 
     } catch (error) {
         console.error("Error al actualizar el rol:", error.message || error);

@@ -20,7 +20,7 @@ service UsersRolesService @(path:'/api/sec/usersroles') {
    
 //------------------------------Fin rutas de Echauri uwu--------------------------------
 
-    // DELETE universal (para usuarios o roles)
+    // DELETE (para usuarios o roles)
     @Core.Description: 'Elimina usuario o rol por ID'
     @path: 'delete'
     action delete(
@@ -40,7 +40,7 @@ service UsersRolesService @(path:'/api/sec/usersroles') {
         role: Roles,       
     ) returns {
         success: Boolean;
-        modifiedCount: Integer;
+        message: String;
     };
 
     // POST USERS / ROLES
