@@ -35,23 +35,32 @@ class InvestionsClass extends cds.ApplicationService{
         // })
 
         this.on("updateLabel", async (req)=>{
-            return servicio.UpdateLabelsValues(req);
+            try {
+                return servicio.UpdateLabelsValues(req);
+            }catch(error){
+                req.error(error.code || 500, error.message || "Error inesperado");
+            }
         })
 
         this.on("deleteLabelOrValue", async (req)=>{
-            return servicio.DeleteLabelsValues(req);
+            try {
+                return servicio.DeleteLabelsValues(req);
+            } catch (error) {
+                // console.error("Error al procesar la solicitud:", error);  // Registra el error completo
+                 req.error(error.code || 500, error.message || "Error inesperado");
+            }
         })
 
         this.on("createLabel", async (req) => {
             try {
                 // Verifica que req.data contenga el objeto que esperas
-                console.log("Datos recibidos: ", req.data);  // Muestra los datos que estás recibiendo en la consola
+                // console.log("Datos recibidos: ", req.data);  // Muestra los datos que estás recibiendo en la consola
        
                 const result = await servicio.PostLabelsValues(req);
                 return result;
             } catch (error) {
-                console.error("Error al procesar la solicitud:", error);  // Registra el error completo
-                return { message: "Error al procesar la solicitud", error: error.message || error };
+                // console.error("Error al procesar la solicitud:", error);  // Registra el error completo
+                 req.error(error.code || 500, error.message || "Error inesperado");
             }
         });
        

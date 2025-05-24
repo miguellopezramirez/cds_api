@@ -13,13 +13,24 @@ async function getAllSimulaciones(req) {
   try {
     const idUser = req.req.body?.idUser;
     const idSimulation = req.req.query?.id;
-    let simulation;
+    const date = req.req.query?.date; // fecha única
 
-    if (idSimulation != null) {
-      simulation = await ztsimulation.findOne({ idSimulation }).lean();
-    } else {
-      simulation = await ztsimulation.find({ idUser }).lean();
-    }
+    // Construir filtro dinámicamente con búsqueda parcial
+    const filter = {};
+    if (idUser) filter.idUser = idUser;
+    if (idSimulation) filter.idSimulation = { $regex: idSimulation, $options: 'i' };
+
+     // Filtrado por fechas
+        if (date) {
+      // Buscar simulaciones creadas a partir de esa fecha (aproximada)
+      const start = new Date(date);
+      filter.createdAt = { $gte: start };
+    }  
+    console.log(filter)
+    // Si no hay filtros, devuelve todo
+    const simulation = Object.keys(filter).length > 0
+      ? await ztsimulation.find(filter).lean()
+      : await ztsimulation.find().lean();
 
     return simulation;
   } catch (e) {
@@ -59,7 +70,7 @@ async function deleteSimulation(idSimulation, idUser, type = "fisic") {
       CURRENT: true,
       REGDATE: now,
       REGTIME: now,
-      REGUSER: "MIGUEL"
+      REGUSER: idUser
     };
 
     // Inactivar registros actuales
