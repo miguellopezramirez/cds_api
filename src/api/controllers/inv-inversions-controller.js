@@ -28,7 +28,7 @@ class InvestionsClass extends cds.ApplicationService{
  this.on('deleteSimulation', async (req) => {
   const idSimulation = req.req.query?.id;
   const idUser = req.data?.idUser;
-  const tipo = req.req.query?.type || "fisic"; // 👈 Nuevo parámetro: "logic" o "fisic"
+  const tipo = req.req.query?.type || "fisic"; //  Nuevo parámetro: "logic" o "fisic"
 
   return await sercivioSimulacion.deleteSimulation(idSimulation, idUser, tipo);
 });

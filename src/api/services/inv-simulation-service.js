@@ -20,7 +20,7 @@ async function getAllSimulaciones(req) {
   }
 }
 
-// 🗑️ Borrar simulación (lógico o físico)
+//  Borrar simulación (lógico o físico)
 async function deleteSimulation(idSimulation, idUser, type = "fisic") {
   if (!idSimulation || !idUser) {
     throw new Error("Parámetros incompletos: se requiere idSimulation y idUser.");
@@ -71,6 +71,7 @@ async function deleteSimulation(idSimulation, idUser, type = "fisic") {
       idSimulation,
       user: idUser
     };
+    
   }
 
   throw new Error("Tipo de borrado no reconocido. Usa 'fisic' o 'logic'.");
