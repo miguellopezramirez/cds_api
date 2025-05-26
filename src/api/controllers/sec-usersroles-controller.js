@@ -4,59 +4,23 @@ const servicio = require('../services/sec-usersroles-service');
 class UsersRolesController extends cds.ApplicationService {
     async init() {
         // DELETE unificado
-      // DELETE unificado
         this.on('delete', async (req) => {
-            const { type, id } = req.data;
-            
             try {
-                // Llamada al servicio DeleteUserOrRole
-                const result = await servicio.DeleteUserOrRole({ 
-                    body: { 
-                        [type === 'user' ? 'USERID' : 'ROLEID']: id 
-                    } 
-                });
-                
-                return result;  // Si la eliminación fue exitosa, retornamos el resultado
-
+                return await servicio.DeleteUserOrRole(req);
             } catch (error) {
-                // Si ocurre un error, capturamos el mensaje y lo enviamos como respuesta al frontend
-                console.error("Error al eliminar:", error);
-                req.error(400, error.message);  // Devolvemos el error con un código 400 y el mensaje
+                req.error(error.code || 500, error.message || "Error inesperado");
             }
         });
 
-
         // UPDATE unificado (estilo labels-values)
         this.on('update', async (req) => {
-            const { type, user, role } = req.data;
-
             try {
-                if (type === 'user') {
-                    if (!user?.USERID) throw { code: 'USERID_REQUIRED', message: "USERID es requerido" };
-                    return await servicio.PatchUser({
-                        body: {
-                            type: 'user',
-                            id: user.USERID,
-                            data: user
-                        }
-                    });
-                } else if (type === 'role') {
-                    if (!role?.ROLEID) throw { code: 'ROLEID_REQUIRED', message: "ROLEID es requerido" };
-                    return await servicio.PatchRole({
-                        body: {
-                            type: 'role',
-                            id: role.ROLEID,
-                            data: role
-                        }
-                    });
-                }
-                throw { code: 'INVALID_TYPE', message: "Tipo inválido. Use 'user' o 'role'" };
+                return await servicio.PatchUserOrRole(req);
             } catch (error) {
                 console.error("Error en update:", error);
                 req.error(error.code || 500, error.message || "Error inesperado");
             }
         });
-
 
         // GET ALL USERS
         this.on('fetchAll', async (req) => {
