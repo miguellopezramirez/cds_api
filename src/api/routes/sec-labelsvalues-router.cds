@@ -26,7 +26,7 @@ service catalogos @(path:'/api/catalogos') {
     // Ruta para agregar un valor a un catálogo
     @Core.Description: 'd aAd value to a label'
     @path: 'createLabel'
-    action createLabel(labels: array of label, values: array of value_) 
+    action createLabel(label: array of label, value: array of value_) 
     returns {
         success: Boolean;
         message: String;
