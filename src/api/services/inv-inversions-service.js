@@ -190,7 +190,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
 
     return {
         priceData: dataWithMAs.map(item => ({
-            date: item.price_history.date.split('T')[0],
+            date: item.price_history.date,
             open: item.price_history.open,
             high: item.price_history.high,
             low: item.price_history.low,
