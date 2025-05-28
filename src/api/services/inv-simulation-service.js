@@ -199,70 +199,7 @@ const updateSimulationName = async (idSimulation, newName, idUser) => {
   }
 };
 
-const updateSimulationName = async (id, simulationName, idUser) => {
-    try {
-        // 1. Buscar la simulación SIN .lean()
-        const simulationToUpdate = await ztsimulation.findOne({ SIMULATIONID: id });
-        if (!simulationToUpdate) {
-            throw {
-                code: 400,
-                message: `No se encontró simulación con SIMULATIONID: ${id}`,
-                error: "SIMULATION_NOT_FOUND"
-            };
-        }
 
-        // 2. Clonar y actualizar los registros anteriores
-        let registrosViejos = [];
-        if (Array.isArray(simulationToUpdate.DETAIL_ROW?.DETAIL_ROW_REG)) {
-            registrosViejos = simulationToUpdate.DETAIL_ROW.DETAIL_ROW_REG.map(reg => {
-                // Clona el objeto y fuerza CURRENT a false
-                return { ...reg, CURRENT: false };
-            });
-        }
-
-        // 3. Crear nuevo registro para el historial
-        const newRegistry = {
-            CURRENT: true,
-            REGDATE: new Date(),
-            REGTIME: new Date().toTimeString().split(' ')[0],
-            REGUSER: idUser || 'system'
-        };
-
-        // 4. Preparar el objeto de actualización SOLO con los campos necesarios
-        const updateObject = {
-            SIMULATIONNAME: simulationName,
-            "DETAIL_ROW.ACTIVED": simulationToUpdate.DETAIL_ROW?.ACTIVED ?? true,
-            "DETAIL_ROW.DELETED": simulationToUpdate.DETAIL_ROW?.DELETED ?? false,
-            "DETAIL_ROW.DETAIL_ROW_REG": [
-                ...registrosViejos,
-                newRegistry
-            ]
-        };
-
-        // 5. Realizar el update
-        const updatedSimulation = await ztsimulation.findOneAndUpdate(
-            { SIMULATIONID: id },
-            { $set: updateObject },
-            { new: true }
-        );
-
-        if (!updatedSimulation) {
-            throw {
-                code: 400,
-                message: "No se pudo actualizar la simulación",
-                error: "UPDATE_FAILED"
-            };
-        }
-
-        return {
-            message: "Simulación actualizada exitosamente",
-            success: true,
-            simulation: updatedSimulation
-        };
-    } catch (error) {
-        throw error;
-    }
-}
 
 module.exports = {
   updateSimulationName,
