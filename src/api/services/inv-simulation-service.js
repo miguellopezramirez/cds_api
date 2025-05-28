@@ -23,60 +23,69 @@ async function getAllSimulaciones(req) {
 //  Borrar simulación (lógico o físico)
 async function deleteSimulation(idSimulation, idUser, type = "fisic") {
   if (!idSimulation || !idUser) {
-    throw new Error("Parámetros incompletos: se requiere idSimulation y idUser.");
+    throw new Error("Faltan parámetros: idSimulation y idUser.");
   }
 
-  if (type === "fisic") {
-    const deleted = await ztsimulation.findOneAndDelete({ idSimulation, idUser });
-    if (!deleted) throw new Error("No se encontró la simulación para eliminar.");
-    return {
-      message: "Simulación eliminada permanentemente.",
-      idSimulation: deleted.idSimulation,
-      user: deleted.idUser,
-    };
-  }
+  const query = { SIMULATIONID: idSimulation, USERID: idUser };
 
   if (type === "logic") {
-    const simulacion = await ztsimulation.findOne({ idSimulation, idUser });
-    if (!simulacion) throw new Error("Simulación no encontrada para borrado lógico.");
+    const simulacion = await ztsimulation.findOne(query);
+    if (!simulacion) throw new Error("Simulación no encontrada.");
 
-    // Validar si ya fue marcada como eliminada lógicamente
-    const yaEliminada = simulacion.DETAIL_ROW?.[0]?.DELETED === true;
-    if (yaEliminada) {
-      throw new Error("La simulación ya fue eliminada lógicamente previamente.");
+    const detailRow = simulacion.DETAIL_ROW?.[0] || simulacion.DETAIL_ROW;
+
+    // ✅ Validación fuerte: ya está eliminada
+    if (detailRow?.DELETED === true || detailRow?.ACTIVED === false) {
+      throw new Error("❌ Esta simulación ya fue eliminada lógicamente.");
     }
 
-    const now = new Date();
-    const newRegistro = {
+    const now = new Date().toISOString();
+
+    const registrosActualizados = (detailRow?.DETAIL_ROW_REG || []).map(r => ({
+      ...r,
+      CURRENT: false
+    }));
+
+    const nuevoRegistro = {
       CURRENT: true,
       REGDATE: now,
       REGTIME: now,
       REGUSER: "MIGUEL"
     };
 
-    // Inactivar registros actuales
-    simulacion.DETAIL_ROW?.[0]?.DETAIL_ROW_REG?.forEach(r => r.CURRENT = false);
+    registrosActualizados.push(nuevoRegistro);
 
-    // Agregar nuevo registro
-    simulacion.DETAIL_ROW = simulacion.DETAIL_ROW || [{}];
-    simulacion.DETAIL_ROW[0].DELETED = true;
-    simulacion.DETAIL_ROW[0].ACTIVED = false;
-    simulacion.DETAIL_ROW[0].DETAIL_ROW_REG = simulacion.DETAIL_ROW[0].DETAIL_ROW_REG || [];
-    simulacion.DETAIL_ROW[0].DETAIL_ROW_REG.push(newRegistro);
-
-    await simulacion.save();
+    await ztsimulation.updateOne(query, {
+      $set: {
+        "DETAIL_ROW.DELETED": true,
+        "DETAIL_ROW.ACTIVED": false,
+        "DETAIL_ROW.DETAIL_ROW_REG": registrosActualizados
+      }
+    });
 
     return {
-      message: "Simulación actualizada con borrado lógico.",
+      message: "✅ Simulación eliminada lógicamente.",
       idSimulation,
       user: idUser
     };
-    
   }
 
-  throw new Error("Tipo de borrado no reconocido. Usa 'fisic' o 'logic'.");
+  if (type === "fisic") {
+    const deleted = await ztsimulation.findOneAndDelete(query);
+    if (!deleted) throw new Error("No se encontró la simulación para eliminar.");
+    return {
+      message: "🗑️ Simulación eliminada permanentemente.",
+      idSimulation: deleted.SIMULATIONID,
+      user: deleted.USERID
+    };
+  }
+
+  throw new Error("Tipo no válido. Usa 'logic' o 'fisic'.");
 }
-// ✏️ Actualizar nombre
+
+
+
+//  Actualizar nombre
 const updateSimulationName = async (idSimulation, newName) => {
   if (!idSimulation || !newName) throw new Error("Faltan parámetros obligatorios");
   const updated = await ztsimulation.findOneAndUpdate(

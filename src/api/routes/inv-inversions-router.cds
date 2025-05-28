@@ -36,7 +36,7 @@ service PricesHistoryRoute @(path:'/api/inv') {
     @Core.Description:'delete simulation by id and user'
     @path : 'deleteSimulation'
     action deleteSimulation(
-        idUser : String
+        USERID : String
     )
     returns String;
 

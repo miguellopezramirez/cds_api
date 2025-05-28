@@ -25,12 +25,27 @@ class InvestionsClass extends cds.ApplicationService{
             return servicio.GetAllInvestmentStrategies(req);
         })
         //delete
- this.on('deleteSimulation', async (req) => {
-  const idSimulation = req.req.query?.id;
-  const idUser = req.data?.idUser;
-  const tipo = req.req.query?.type || "fisic"; //  Nuevo parámetro: "logic" o "fisic"
+// 🧩 Endpoint para borrar simulaciones (físico o lógico)
+this.on('deleteSimulation', async (req) => {
+  try {
+    const idSimulation = req.req.query?.id;
+    const tipo = req.req.query?.type || "fisic"; // 👈 "logic" o "fisic"
+const idUser = req.data.USERID;
 
-  return await sercivioSimulacion.deleteSimulation(idSimulation, idUser, tipo);
+    // 🛑 Validación de parámetros obligatorios
+    if (!idSimulation || !idUser) {
+      req.error(400, "Faltan parámetros obligatorios: id (query) e idUser (body).");
+      return;
+    }
+
+    // ✅ Llamar al servicio correctamente
+    const result = await sercivioSimulacion.deleteSimulation(idSimulation, idUser, tipo);
+    return result;
+
+  } catch (error) {
+    console.error("❌ Error en deleteSimulation:", error.message);
+    req.error(500, `Error al eliminar la simulación: ${error.message}`);
+  }
 });
 
 
