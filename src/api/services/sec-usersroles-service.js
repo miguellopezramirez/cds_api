@@ -18,22 +18,13 @@ async function PatchUser(req) {
         if (updates.ROLES) {
             await validateRolesExist(updates.ROLES);
         }
+        
+        updates.DETAIL_ROW = {
+            ...user.DETAIL_ROW, 
+            DELETED: false,
+            ACTIVED: true
+        };
 
-        //Manejo del borrado lógico 
-        if (Object.keys(updates).every(key => key === 'USERID')) {
-            updates.DETAIL_ROW = {
-                ...user.DETAIL_ROW, 
-                DELETED: true,      
-                ACTIVED: false
-            };
-        }
-        else {
-            updates.DETAIL_ROW = {
-                ...user.DETAIL_ROW, 
-                DELETED: false,
-                ACTIVED: true
-            };
-        }
         //Agregar registro de DETAIL_ROW
         updates.DETAIL_ROW.DETAIL_ROW_REG = updateAuditLog(
             user.DETAIL_ROW?.DETAIL_ROW_REG || [], 
@@ -41,59 +32,139 @@ async function PatchUser(req) {
         );
 
         //Actualizar datos
-        const result = await ztusers.updateOne({ USERID: id }, { $set: updates });
-        return { success: true, modifiedCount: result.modifiedCount };
-
+        await ztusers.updateOne({ USERID: id }, { $set: updates });
+        return { success: true, message: `El usuario ${id} ha sido modificado correctamente.` };;
     } catch (error) {
         console.error("Error al actualizar el usuario: ", error.message);
         throw error;
     }
 }
 
-async function PatchRole(req) {
-    const { body } = req;
-
-    const { id, data: updates = {} } = body;
-    if (!id) throw { code: 'ROLEID_REQUIRED', message: "Se requiere ROLEID" };
-
+// Update de usuarios y roles
+async function PatchUserOrRole(req) {
     try {
-        // Verifica que el rol exista
-        const role = await ztroles.findOne({ ROLEID: id });
-        if (!role || (role.DETAIL_ROW?.DELETED === true))
-            throw { code: 'ROLE_NOT_FOUND', message: `Rol con ROLEID ${id} no encontrado` };
+        const type = req.req.query?.type?.toLowerCase(); // 'user' o 'role'
+        const id = req.req.query?.id;
+        const reguser = req.req.query?.reguser || 'system';
+        const data = req.req.body;
+
+        if (!type) {
+            throw { code: 400, message: "Se requiere el parámetro 'type' (user o role)." };
+        }
+
+        if (!id) {
+            throw { 
+                code: 400, 
+                message: `Se requiere el parámetro 'id' (${type === 'user' ? 'USERID' : 'ROLEID'})` 
+            };
+        }
+
+        if (!data) {
+            throw { code: 400, message: "Se requieren datos para actualizar en el body." };
+        }
+
+        if (type === 'user') {
+            return await updateUser(id, data.user, reguser);
+        } else if (type === 'role') {
+            return await updateRole(id, data.role, reguser);
+        } else {
+            throw { code: 400, message: "Parámetro 'type' no válido. Usa 'user' o 'role'." };
+        }
+
+    } catch (error) {
+        throw error;
+    }
+}
+
+// 🔴 Actualización de Usuarios
+async function updateUser(id, updates, reguser) {
+    try {
+        // Validar que el usuario exista
+        const user = await ztusers.findOne({ USERID: id }).lean();
+        if (!user) {
+            throw { 
+                code: 404, 
+                message: `Usuario con USERID ${id} no encontrado` 
+            };
+        }
+
+        // Si se modificará un rol, validar que el rol exista
+        if (updates.ROLES) {
+            await validateRolesExist(updates.ROLES);
+        }
+        
+        // Preparar actualización de DETAIL_ROW
+        updates.DETAIL_ROW = {
+            ...user.DETAIL_ROW, 
+            DELETED: false,
+            ACTIVED: true,
+            DETAIL_ROW_REG: updateAuditLog(
+                user.DETAIL_ROW?.DETAIL_ROW_REG || [], 
+                reguser
+            )
+        };
+
+        // Actualizar datos
+        await ztusers.updateOne({ USERID: id }, { $set: updates });
+        
+        return {
+            code: 200,
+            success: true,
+            message: `Usuario ${id} actualizado correctamente`,
+            updatedUser: { USERID: id, ...updates }
+        };
+
+    } catch (error) {
+        throw { 
+            code: error.code || 500, 
+            message: `Error al actualizar usuario: ${error.message}` 
+        };
+    }
+}
+
+// 🔵 Actualización de Roles
+async function updateRole(id, updates, reguser) {
+    try {
+        // Verificar que el rol exista
+        const role = await ztroles.findOne({ ROLEID: id }).lean();
+        if (!role) {
+            throw { 
+                code: 404, 
+                message: `Rol con ROLEID ${id} no encontrado` 
+            };
+        }
 
         // Si se modifican procesos o privilegios validar que existan
         if (updates.PRIVILEGES) {
             await validatePrivilegesExist(updates.PRIVILEGES);
         }
 
-        // Manejo del borrado lógico
-        if (Object.keys(updates).every(key => key === 'ROLEID')) {
-            updates.DETAIL_ROW = {
-                ...role.DETAIL_ROW,
-                DELETED: true,
-                ACTIVED: false
-            };
-        } else {
-            updates.DETAIL_ROW = {
-                ...role.DETAIL_ROW,
-                DELETED: false,
-                ACTIVED: true
-            };
-        }
-        // Agregar registro de DETAIL_ROW
-        updates.DETAIL_ROW.DETAIL_ROW_REG = updateAuditLog(
-            role.DETAIL_ROW?.DETAIL_ROW_REG || [],
-            req.user?.id || 'aramis'
-        );
+        // Preparar actualización de DETAIL_ROW
+        updates.DETAIL_ROW = {
+            ...role.DETAIL_ROW,
+            DELETED: false,
+            ACTIVED: true,
+            DETAIL_ROW_REG: updateAuditLog(
+                role.DETAIL_ROW?.DETAIL_ROW_REG || [],
+                reguser
+            )
+        };
 
         // Actualizar datos
-        const result = await ztroles.updateOne({ ROLEID: id }, { $set: updates });
-        return { success: true, modifiedCount: result.modifiedCount };
+        await ztroles.updateOne({ ROLEID: id }, { $set: updates });
+        
+        return {
+            code: 200,
+            success: true,
+            message: `Rol ${id} actualizado correctamente`,
+            updatedRole: { ROLEID: id, ...updates }
+        };
 
     } catch (error) {
-        console.error("Error al actualizar el rol:", error.message || error);
-        throw error; // Re-lanzar el error para que el frontend lo reciba
+        throw { 
+            code: error.code || 500, 
+            message: `Error al actualizar rol: ${error.message}` 
+        };
     }
 }
 
@@ -141,51 +212,174 @@ async function validatePrivilegesExist(privileges) {
     }));
 }
 
-// --- Auditoría ---
-function updateAuditLog(existingLog = [], currentUser) {
-    // Marcar registros anteriores como no actuales
-    const updatedLog = existingLog.map(entry => ({ ...entry, CURRENT: false }));
-
-    // Añadir nuevo registro
-    updatedLog.push({
+// Función auxiliar para actualizar el registro de auditoría
+function updateAuditLog(existingRegistries = [], reguser) {
+    const newRegistry = {
         CURRENT: true,
         REGDATE: new Date(),
         REGTIME: new Date(),
-        REGUSER: currentUser
-    });
+        REGUSER: reguser
+    };
 
-    return updatedLog;
+    return [
+        ...(existingRegistries
+            .filter(reg => typeof reg === 'object' && reg !== null)
+            .map(reg => ({ ...reg, CURRENT: false }))) || [],
+        newRegistry
+    ];
 }
 
+// Delete de usuarios y roles
 async function DeleteUserOrRole(req) {
-    const { USERID, ROLEID } = req.body;
-
     try {
-        // 1. Determinar entidad (usuario o rol)
-        if (USERID) {
-            // Eliminar usuario
-            const result = await ztusers.deleteOne({ USERID });
-            if (result.deletedCount === 0) throw new Error(`Usuario con USERID ${USERID} no encontrado`);
-            return { success: true, message: `Usuario ${USERID} eliminado físicamente` };
+        const type = req.req.query?.type?.toLowerCase(); // 'user' o 'role'
+        const id = req.req.query?.id;
+        const mode = req.req.query?.mode?.toLowerCase(); // 'logical' o 'physical'
+        const reguser = req.req.query?.reguser;
 
-        } else if (ROLEID) {
-            // Validar que el rol no esté en uso
-            const usersWithRole = await ztusers.countDocuments({ 
-                "ROLES.ROLEID": ROLEID 
-            });
-            if (usersWithRole > 0) throw new Error(`No se puede eliminar: Rol ${ROLEID} está asignado a ${usersWithRole} usuario(s)`);
-
-            // Eliminar rol
-            const result = await ztroles.deleteOne({ ROLEID });
-            if (result.deletedCount === 0) throw new Error(`Rol con ROLEID ${ROLEID} no encontrado`);
-            return { success: true, message: `Rol ${ROLEID} eliminado físicamente` };
-
-        } else {
-            throw new Error("Se requiere USERID o ROLEID");
+        if (!id) {
+            throw { code: 400, message: "Se requiere el parámetro 'id' para borrar." };
         }
+
+        if (!['logical', 'physical'].includes(mode)) {
+            throw { code: 400, message: "Parámetro 'mode' no válido. Usa 'logical' o 'physical'." };
+        }
+
+        if (!reguser && mode === 'logical') {
+            throw { code: 400, message: "Para el borrado lógico se requiere el parámetro 'reguser'." };
+        }
+
+        if (type === 'user') {
+            return await deleteUser(id, mode, reguser);
+        } else if (type === 'role') {
+            return await deleteRole(id, mode, reguser);
+        } else {
+            throw { code: 400, message: "Parámetro 'type' no válido. Usa 'user' o 'role'." };
+        }
+
     } catch (error) {
-        console.error("Error al eliminar el registro:", error);
         throw error;
+    }
+}
+
+// 🔴 Borrado de Usuarios
+async function deleteUser(id, mode, reguser) {
+    try {
+        const user = await ztusers.findOne({ USERID: id }).lean();
+        if (!user) {
+            throw { code: 404, message: `No se encontró usuario con USERID: ${id}` };
+        }
+
+        if (mode === 'physical') {
+            await ztusers.deleteOne({ USERID: id });
+            return {
+                code: 200,
+                message: "Usuario borrado físicamente exitosamente",
+                deletedUser: user
+            };
+        }
+
+        // Borrado lógico
+        const newRegistry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: reguser
+        };
+
+        const updateObject = {
+            DETAIL_ROW: {
+                ACTIVED: false,
+                DELETED: true,
+                DETAIL_ROW_REG: [
+                    ...(user.DETAIL_ROW?.DETAIL_ROW_REG
+                        ?.filter(reg => typeof reg === 'object' && reg !== null)
+                        ?.map(reg => ({ ...reg, CURRENT: false })) || []),
+                    newRegistry
+                ]
+            }
+        };
+
+        const updatedUser = await ztusers.findOneAndUpdate(
+            { USERID: id },
+            { $set: updateObject },
+            { new: true, lean: true }
+        );
+
+        return {
+            code: 200,
+            message: "Usuario borrado lógicamente exitosamente",
+            updatedUser
+        };
+
+    } catch (error) {
+        throw { code: 500, message: `Error al borrar usuario: ${error.message}` };
+    }
+}
+
+// 🔵 Borrado de Roles
+async function deleteRole(id, mode, reguser) {
+    try {
+        const role = await ztroles.findOne({ ROLEID: id }).lean();
+        if (!role) {
+            throw { code: 404, message: `No se encontró rol con ROLEID: ${id}` };
+        }
+
+        // Validar que el rol no esté en uso (solo para borrado físico)
+        if (mode === 'physical') {
+            const usersWithRole = await ztusers.countDocuments({ 
+                "ROLES.ROLEID": id 
+            });
+            if (usersWithRole > 0) {
+                throw { 
+                    code: 400, 
+                    message: `No se puede eliminar: Rol ${id} está asignado a ${usersWithRole} usuario(s)` 
+                };
+            }
+            
+            await ztroles.deleteOne({ ROLEID: id });
+            return {
+                code: 200,
+                message: "Rol borrado físicamente exitosamente",
+                deletedRole: role
+            };
+        }
+
+        // Borrado lógico
+        const newRegistry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: reguser
+        };
+
+        const updateObject = {
+            DETAIL_ROW: {
+                ACTIVED: false,
+                DELETED: true,
+                DETAIL_ROW_REG: [
+                    ...(role.DETAIL_ROW?.DETAIL_ROW_REG
+                        ?.filter(reg => typeof reg === 'object' && reg !== null)
+                        ?.map(reg => ({ ...reg, CURRENT: false })) || []),
+                    newRegistry
+                ]
+            }
+        };
+
+        const updatedRole = await ztroles.findOneAndUpdate(
+            { ROLEID: id },
+            { $set: updateObject },
+            { new: true, lean: true }
+        );
+
+        return {
+            code: 200,
+            message: "Rol borrado lógicamente exitosamente",
+            updatedRole
+        };
+
+    } catch (error) {
+        throw { code: error.code || 500, message: `Error al borrar rol: ${error.message}` };
     }
 }
 
@@ -287,8 +481,7 @@ async function CreateRole(req) {
 }
 
 module.exports = {
-    PatchUser,
-    PatchRole,
+    PatchUserOrRole,
     DeleteUserOrRole,
     GetAllUsers,
     GetAllRoles,

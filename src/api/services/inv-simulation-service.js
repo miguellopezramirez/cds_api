@@ -1,16 +1,67 @@
 const ztsimulation = require('../models/mongodb/ztsimulation');
+//funciones date 
+function formatDate(date) {
+  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function formatTime(date) {
+  return date.toTimeString().split(' ')[0]; // HH:mm:ss
+}
 
 // 🔍 Obtener simulaciones
 async function getAllSimulaciones(req) {
   try {
-    const idUser = req.req.body?.idUser;
-    const idSimulation = req.req.query?.id;
-    let simulation;
+    const idUser = req.req.query?.idUser;// id del usuario
+    const idSimulation = req.req.query?.id;//paramtros de la id de simulacion
+    const dateI = req.req.query?.dateI;  // inicio de rango (YYYY-MM-DD)
+    var dateF = req.req.query?.dateF;  // fin de rango (YYYY-MM-DD)
 
-    if (idSimulation != null) {
-      simulation = await ztsimulation.findOne({ idSimulation }).lean();
-    } else {
-      simulation = await ztsimulation.find({ idUser }).lean();
+
+    // Construir filtro dinámicamente con búsqueda parcial
+    const filter = {};
+    if (idUser) filter.USERID = idUser;
+    if (idSimulation) filter.SIMULATIONID = { $regex: idSimulation, $options: 'i' };
+
+     
+    if (dateI && !dateF) {
+     //Asignar a fecha de fin la fecha actual
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      dateF = `${yyyy}-${mm}-${dd}`;
+    }
+      
+    // Buscar por rango de fechas en SIMULATIONID
+    if (dateI && dateF) {
+      // Generar todas las fechas del rango
+      const datesInRange = [];
+      let current = new Date(dateI);
+      const end = new Date(dateF);
+      while (current <= end) {
+        const yyyy = current.getFullYear();
+        const mm = String(current.getMonth() + 1).padStart(2, '0');
+        const dd = String(current.getDate() + 1).padStart(2, '0');
+        datesInRange.push(`${yyyy}-${mm}-${dd}`);
+        current.setDate(current.getDate() + 1);
+      }
+      // Crear regex que busque cualquiera de las fechas en el rango
+      const regexRange = datesInRange.join('|');
+      filter.SIMULATIONID = { $regex: regexRange, $options: 'i' };
+    }
+
+    // Si no hay filtros, devuelve todo
+    const simulation = Object.keys(filter).length > 0
+      ? await ztsimulation.find(filter).lean()
+      : await ztsimulation.find().lean();
+
+    // Si no se encuentra ninguna simulación, lanzar error
+    if (simulation.length === 0) {
+     return{
+        message: "No se encontraron simulaciones",
+        data: []
+      };
+     
     }
 
     return simulation;
@@ -50,7 +101,7 @@ async function deleteSimulation(idSimulation, idUser, type = "fisic") {
       CURRENT: true,
       REGDATE: now,
       REGTIME: now,
-      REGUSER: "MIGUEL"
+      REGUSER: idUser
     };
 
     registrosActualizados.push(nuevoRegistro);
@@ -96,6 +147,7 @@ const updateSimulationName = async (idSimulation, newName) => {
   if (!updated) throw new Error("Simulación no encontrada");
   return updated;
 };
+
 
 module.exports = {
   updateSimulationName,

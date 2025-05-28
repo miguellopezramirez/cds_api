@@ -44,19 +44,33 @@ function findStopLoss(type, data, currentIndex) {
 }
 
 function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, longMa) {
+    if (!fullHistory || fullHistory.length === 0) {
+        throw new Error("Full history data is required");
+    }
+
     let startIndex = 0;
     if (startDate) {
-        startIndex = fullHistory.findIndex(item => item.date >= startDate);
+        startIndex = fullHistory.findIndex(item => item && item.date >= new Date(startDate));
         if (startIndex === -1) startIndex = fullHistory.length - 1;
         startIndex = Math.max(0, startIndex - longMa);
     }
 
     let workingData = fullHistory.slice(startIndex);
     if (endDate) {
-        workingData = workingData.filter(item => item.date <= endDate);
+        workingData = workingData.filter(item => item && item.date <= new Date(endDate));
+    }
+
+    // Validación de datos de trabajo
+    if (workingData.length === 0) {
+        throw new Error("No data available for the selected date range");
     }
 
     const dataWithMAs = workingData.map((item, index, array) => {
+        if (!item || !item.close) {
+            console.warn(`Invalid item at index ${index}`);
+            return null;
+        }
+
         const shortSlice = array.slice(Math.max(0, index - shortMa + 1), index + 1);
         const longSlice = array.slice(Math.max(0, index - longMa + 1), index + 1);
         
@@ -66,12 +80,11 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 date: item.date
             },
             short_ma: shortSlice.length >= shortMa ? 
-                shortSlice.reduce((sum, p) => sum + p.close, 0) / shortMa : null,
+                shortSlice.reduce((sum, p) => p && p.close ? sum + p.close : sum, 0) / shortMa : null,
             long_ma: longSlice.length >= longMa ? 
-                longSlice.reduce((sum, p) => sum + p.close, 0) / longMa : null
+                longSlice.reduce((sum, p) => p && p.close ? sum + p.close : sum, 0) / longMa : null
         };
-    }).filter(item => item.price_history.date && item.short_ma !== null && item.long_ma !== null);
-
+    }).filter(item => item !== null && item.price_history && item.price_history.date && item.short_ma !== null && item.long_ma !== null);
     const signals = [];
     let currentPosition = null;
     let entryPrice = 0;
@@ -89,7 +102,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 takeProfit = entryPrice + (2 * (entryPrice - stopLoss));
                 
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'buy',
                     price: entryPrice,
                     reasoning: `Golden Cross: ${shortMa}MA crossed above ${longMa}MA`,
@@ -107,7 +120,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 takeProfit = entryPrice - (2 * (stopLoss - entryPrice));
                 
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'sell',
                     price: entryPrice,
                     reasoning: `Death Cross: ${shortMa}MA crossed below ${longMa}MA`,
@@ -121,7 +134,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         else if (currentPosition === 'buy') {
             if (current.price_history.low <= stopLoss) {
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'sell',
                     price: stopLoss,
                     reasoning: `Stop-loss triggered at ${stopLoss}`,
@@ -130,7 +143,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 currentPosition = null;
             } else if (current.price_history.high >= takeProfit) {
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'sell',
                     price: takeProfit,
                     reasoning: `Take-profit triggered at ${takeProfit}`,
@@ -142,7 +155,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
         else if (currentPosition === 'sell') {
             if (current.price_history.high >= stopLoss) {
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'buy',
                     price: stopLoss,
                     reasoning: `Stop-loss triggered at ${stopLoss}`,
@@ -151,7 +164,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
                 currentPosition = null;
             } else if (current.price_history.low <= takeProfit) {
                 signals.push({
-                    date: current.price_history.date,
+                    date: current.price_history.date.toISOString().split('T')[0],
                     type: 'buy',
                     price: takeProfit,
                     reasoning: `Take-profit triggered at ${takeProfit}`,
@@ -177,7 +190,7 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
 
     return {
         priceData: dataWithMAs.map(item => ({
-            date: item.price_history.date,
+            date: item.price_history.date.split('T')[0],
             open: item.price_history.open,
             high: item.price_history.high,
             low: item.price_history.low,
@@ -190,129 +203,222 @@ function calculateMovingAverageData(fullHistory, startDate, endDate, shortMa, lo
     };
 }
 
-function parseSpecs(specsString) {
-  const defaults = { short: 50, long: 200 };
-  const result = { ...defaults };
-
-  if (!specsString) return result;
-
-  const validKeys = new Set(['short', 'long']);
-  const minValues = { short: 5, long: 20 };
-
-  specsString.split('&').forEach(part => {
-    const [rawKey, value] = part.split(':');
-    if (!rawKey || !value) return;
+function parseSpecs(specsArray) {
+    const defaults = { SHORT_MA: 50, LONG_MA: 200 };
     
-    const key = rawKey.trim().toLowerCase();
-    const numValue = parseInt(value);
+    if (!Array.isArray(specsArray)) return defaults;
+
+    const result = { ...defaults };
     
-    if (validKeys.has(key) && !isNaN(numValue)) {
-      result[key] = Math.max(minValues[key], numValue);
-    }
-  });
-
-  return result;
-}
-
-async function SimulateMACrossover(params) { 
-    try {
-        const symbol = params?.symbol || 'AAPL';
-        const startDate = params?.startDate ? new Date(params.startDate) : null;
-        const endDate = params?.endDate ? new Date(params.endDate) : null;
-        const amount = params?.amount || 1000;
-        const userId = params?.userId || 'system';
-        const { short: shortMa, long: longMa } = parseSpecs(params?.specs);
+    specsArray.forEach(item => {
+        if (!item || !item.INDICATOR) return;
         
-        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
-        const response = await axios.get(url);
-        const timeSeries = response.data['Time Series (Daily)'];
-    
-        let history = Object.entries(timeSeries)
-            .map(([date, data]) => ({
-            date: new Date(date),
-            open: parseFloat(data['1. open']),
-            high: parseFloat(data['2. high']),
-            low: parseFloat(data['3. low']),
-            close: parseFloat(data['4. close']),
-            volume: parseInt(data['5. volume'])
-        })).sort((a, b) => a.date - b.date);
-
-        const { priceData, signals } = calculateMovingAverageData(history, startDate, endDate, shortMa, longMa);
+        const key = item.INDICATOR.toUpperCase();
+        const value = parseInt(item.VALUE);
         
-        let currentAmount = amount;
-        let shares = 0;
-        const transactions = [];
-        
-        signals.forEach(signal => {
-            if (signal.type === 'buy' && currentAmount > 0) {
-                shares = currentAmount / signal.price;
-                currentAmount = 0;
-                transactions.push({...signal, shares});
-            } else if (signal.type === 'sell' && shares > 0) {
-                currentAmount = shares * signal.price;
-                shares = 0;
-                transactions.push({...signal, proceeds: currentAmount});
+        if (!isNaN(value)) {
+            if (key === 'SHORT_MA' && value >= 5) {
+                result.SHORT_MA = value;
+            } else if (key === 'LONG_MA' && value >= 20) {
+                result.LONG_MA = value;
             }
-        });
+        }
+    });
 
-        if (shares > 0) {
-            const lastPrice = priceData[priceData.length - 1].close;
-            currentAmount = shares * lastPrice;
-            transactions.push({
-                date: priceData[priceData.length - 1].date,
-                type: 'sell',
-                price: lastPrice,
-                reasoning: 'Final position closed',
-                proceeds: currentAmount,
-                isFinal: true
-            });
+    // Validar que SHORT_MA sea menor que LONG_MA
+    if (result.SHORT_MA >= result.LONG_MA) {
+        result.LONG_MA = result.SHORT_MA + 50;
+    }
+
+    return result;
+}
+async function SimulateMACrossover(body) {
+    try {
+        // Versión adaptada al controlador existente
+        // body ya es el objeto SIMULATION que viene del controlador
+        const { SYMBOL, STARTDATE, ENDDATE, AMOUNT, USERID, SPECS } = body;
+
+        // Validación de parámetros
+        const requiredFields = ['SYMBOL', 'STARTDATE', 'ENDDATE', 'AMOUNT', 'USERID', 'SPECS'];
+        const missingFields = requiredFields.filter(field => !body[field]);
+        
+        if (missingFields.length > 0) {
+            throw new Error(`Faltan campos requeridos en SIMULATION: ${missingFields.join(', ')}`);
         }
 
-        const profit = currentAmount - amount;
-        const percentageReturn = (profit / amount) * 100;
+        // Obtener datos históricos
+        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${SYMBOL}&outputsize=full&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`;
+        const response = await axios.get(url);
+        
+        if (!response.data || !response.data['Time Series (Daily)']) {
+            throw new Error("Invalid data format from Alpha Vantage API");
+        }
 
+        const timeSeries = response.data['Time Series (Daily)'];
+
+        // Procesar datos históricos
+        let history = Object.entries(timeSeries)
+            .map(([date, data]) => {
+                if (!data || !data['4. close']) {
+                    console.warn(`Datos incompletos para la fecha ${date}`);
+                    return null;
+                }
+                return {
+                    date: new Date(date),
+                    open: parseFloat(data['1. open']),
+                    high: parseFloat(data['2. high']),
+                    low: parseFloat(data['3. low']),
+                    close: parseFloat(data['4. close']),
+                    volume: parseInt(data['5. volume'])
+                };
+            })
+            .filter(item => item !== null)
+            .sort((a, b) => a.date - b.date);
+
+        if (history.length === 0) {
+            throw new Error("No valid historical data found");
+        }
+
+        // Parsear especificaciones
+        const { SHORT_MA: shortMa, LONG_MA: longMa } = parseSpecs(SPECS);
+
+        // Calcular medias móviles y señales
+        const { priceData, signals } = calculateMovingAverageData(history, STARTDATE, ENDDATE, shortMa, longMa);
+
+        // Simular transacciones
+        let currentCash = AMOUNT;
+        let sharesHeld = 0;
+        let totalBought = 0;
+        let totalSold = 0;
+        
+        const processedSignals = signals.map(signal => {
+            if (signal.type === 'buy' && currentCash > 0) {
+                const shares = currentCash / signal.price;
+                sharesHeld += shares;
+                totalBought += shares;
+                currentCash = 0;
+                
+                return {
+                    DATE: signal.date.split('T')[0],
+                    TYPE: 'buy',
+                    PRICE: signal.price,
+                    REASONING: signal.reasoning,
+                    SHARES: shares
+                };
+            } else if (signal.type === 'sell' && sharesHeld > 0) {
+                const proceeds = sharesHeld * signal.price;
+                totalSold += sharesHeld;
+                currentCash += proceeds;
+                const shares = sharesHeld;
+                sharesHeld = 0;
+                
+                return {
+                    DATE: signal.date.split('T')[0],
+                    TYPE: 'sell',
+                    PRICE: signal.price,
+                    REASONING: signal.reasoning,
+                    SHARES: shares
+                };
+            }
+            return null;
+        }).filter(Boolean);
+
+        // Cerrar posición final si queda algo abierto
+        if (sharesHeld > 0) {
+            const lastPrice = priceData[priceData.length - 1].close;
+            const proceeds = sharesHeld * lastPrice;
+            totalSold += sharesHeld;
+            currentCash += proceeds;
+            
+            processedSignals.push({
+                DATE: priceData[priceData.length - 1].date,
+                TYPE: 'sell',
+                PRICE: lastPrice,
+                REASONING: 'Final position closed at end of period',
+                SHARES: sharesHeld
+            });
+            
+            sharesHeld = 0;
+        }
+
+        // Calcular métricas finales
+        const finalValue = sharesHeld * priceData[priceData.length - 1].close;
+        const finalBalance = currentCash + finalValue;
+        const profit = finalBalance - AMOUNT;
+        const percentageReturn = (profit / AMOUNT) * 100;
+
+        // Formatear datos para el gráfico
+        const chartData = priceData.map(item => ({
+            DATE: item.date,
+            OPEN: item.open,
+            HIGH: item.high,
+            LOW: item.low,
+            CLOSE: item.close,
+            VOLUME: item.volume,
+            INDICATORS: [
+                { INDICATOR: 'short_ma', VALUE: item.short_ma },
+                { INDICATOR: 'long_ma', VALUE: item.long_ma }
+            ]
+        }));
+
+        // Formatear SPECS como string
+        const formattedSpecs = [
+            { INDICATOR: "SHORT_MA", VALUE: shortMa },
+            { INDICATOR: "LONG_MA", VALUE: longMa }
+        ];
+
+
+        // Crear objeto de simulación
         const simulationData = {
-            idSimulation: `${symbol}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
-            idUser: userId,
-            idStrategy: 'CM',
-            simulationName: `MA Crossover ${shortMa}/${longMa}`,
-            symbol,
-            startDate: startDate || new Date(priceData[0].date),
-            endDate: endDate || new Date(priceData[priceData.length - 1].date),
-            amount: amount,
-            signals: signals,
-            specs: params?.specs || `SHORT:${shortMa}&LONG:${longMa}`,
-            result: currentAmount,
-            percentageReturn: percentageReturn,
-            chart_data: priceData,
-            transactions: transactions,
-            DETAIL_ROW: [{
-                ACTIVED: false,
+            SIMULATIONID: `${SYMBOL}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
+            USERID,
+            STRATEGY: 'IdCM',
+            SIMULATIONNAME: `${SYMBOL}_${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_')}`,
+            SYMBOL,
+            STARTDATE: new Date(STARTDATE),
+            ENDDATE: new Date(ENDDATE),
+            AMOUNT,
+            SIGNALS: processedSignals,
+            SPECS: formattedSpecs,
+            SUMMARY: {
+                TOTAL_BOUGHT_UNITS: totalBought,
+                TOTAL_SOLDUNITS: totalSold,
+                REMAINING_UNITS: sharesHeld,
+                FINAL_CASH: currentCash,
+                FINAL_VALUE: finalValue,
+                FINAL_BALANCE: finalBalance,
+                REAL_PROFIT: profit,
+                PERCENTAGE_RETURN: percentageReturn
+            },
+            CHART_DATA: chartData,
+            DETAIL_ROW: {
+                ACTIVED: true,
                 DELETED: false,
                 DETAIL_ROW_REG: [{
                     CURRENT: true,
                     REGDATE: new Date(),
-                    REGTIME: new Date(),
-                    REGUSER: "SYSTEM"
+                    REGTIME: new Date().toTimeString().split(' ')[0],
+                    REGUSER: USERID
                 }]
-            }]
+            }
         };
 
         // Guardar en MongoDB
         const newSimulation = new Simulation(simulationData);
         await newSimulation.save();
 
-        return JSON.stringify(simulationData);
+        return simulationData;
     
     } catch (e) {
-        console.error('Error in SimulateMACrossover:', e);
-        return JSON.stringify({
-            success: false,
-            error: e.message,
-            stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        console.error('Error in SimulateMACrossover:', {
+            message: e.message,
+            stack: e.stack,
+            inputBody: body
         });
+        throw new Error(`Simulation failed: ${e.message}`);
     }
 }
+
 // MALR: Función para cargar todas las estrategias de inversión en el front
 async function GetAllInvestmentStrategies() {
     try {

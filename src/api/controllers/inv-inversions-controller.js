@@ -7,17 +7,42 @@ class InvestionsClass extends cds.ApplicationService{
            return servicio.GetAllPricesHistory(req);
         });
 
-        this.on('simulation', async (req) => {
-            if (!req.req.query.strategy) throw new Error('Strategy parameter required');
+        this.on("simulation", async (req) => {
+            try {
+                // Extraer 'strategy' de los query params y datos del body
+                const { strategy } = req?.req?.query || {};
+                const body = req?.req?.body?.SIMULATION || {}; 
 
-            if (req.req.query.strategy?.toLowerCase() === 'macrossover') {
-                const result = await servicio.SimulateMACrossover({
-                    ...req.data
-                });
-                return JSON.parse(result);
-            }
-            else {
-                throw new Error('Solo implementado MACrossover strategy');
+                // Validaciones
+                if (!strategy) {
+                    throw new Error(
+                        "Falta el parámetro requerido: 'strategy' en los query parameters."
+                    );
+                }
+                if (Object.keys(body).length === 0) {
+                    throw new Error(
+                        "El cuerpo de la solicitud no puede estar vacío. Se esperan parámetros de simulación."
+                    );
+                }
+
+                // Switch para manejar diferentes estrategias
+                switch (strategy.toLowerCase()) {
+                    case "reversionsimple":
+                        return await reversionSimple(body);
+                    case "macrossover":
+                        return await servicio.SimulateMACrossover(body);
+
+                    default:
+                        throw new Error(`Estrategia no reconocida: ${strategy}`);
+                }
+            } catch (error) {
+                console.error("Error en el controlador de simulación:", error);
+                // Retorna un objeto de error que el framework pueda serializar a JSON.
+                return {
+                ERROR: true,
+                MESSAGE:
+                    error.message || "Error al procesar la solicitud de simulación.",
+                };
             }
         });
 
@@ -59,21 +84,23 @@ const idUser = req.data.USERID;
 
         //updateSimulation
         this.on('updatesimulation', async (req) => {
-            const { id, simulationName } = req.data;
-        
-            if (!id || !simulationName) {
-                req.error(400, 'Faltan parámetros: id y simulationName son requeridos.');
-                return;
-            }
-        
-            try {
-                const updated = await sercivioSimulacion.updateSimulationName(id, simulationName);
-                return updated;
-            } catch (err) {
-                console.error("Error en updatesimulation:", err.message);
-                req.error(500, err.message);
-            }
+        const { id, simulationName, idUser } = req.data;
+
+        if (!id || !simulationName || !idUser) {
+            req.error(400, 'Faltan parámetros: id, simulationName e idUser son requeridos.');
+            return;
+        }
+
+        try {
+            const updated = await sercivioSimulacion.updateSimulationName(id, simulationName, idUser);
+            return updated;
+        } catch (err) {
+            console.error("Error en updatesimulation:", err.message);
+            req.error(500, err.message);
+        }
         });
+
+
 
         this.on('symbols', async (req) => {
             try {
