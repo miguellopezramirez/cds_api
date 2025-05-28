@@ -35,7 +35,7 @@ class UsersRolesController extends cds.ApplicationService {
 
      
        // GET USER BY ID
-       this.on('READ', 'Users', async (req) => {
+       this.on('READ', 'users', async (req) => {
         const { USERID } = req.data;  // Se obtiene el parámetro USERID de la URL
         try {
             const user = await servicio.GetUserById(USERID); // Llamada al servicio para obtener usuario por ID
@@ -47,7 +47,7 @@ class UsersRolesController extends cds.ApplicationService {
     });
 
         // GET ALL ROLES
-        this.on('READ', 'Roles', async (req) => {
+        this.on('READ', 'roles', async (req) => {
             try {
                 const roles = await servicio.GetAllRoles();
                 return roles;
